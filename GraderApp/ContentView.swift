@@ -54,6 +54,19 @@ struct ContentView: View {
                 PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateRubricItem)) { note in
+            guard let delta = note.object as? Int,
+                  let assignment = selectedAssignment else { return }
+            let sorted = assignment.rubricItems.sorted { $0.order < $1.order }
+            guard !sorted.isEmpty else { return }
+            if let current = targetedRubricItem,
+               let idx = sorted.firstIndex(where: { $0.id == current.id }) {
+                let newIdx = idx + delta
+                if newIdx >= 0, newIdx < sorted.count { targetedRubricItem = sorted[newIdx] }
+            } else {
+                targetedRubricItem = sorted.first
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .navigateStudent)) { note in
             guard let delta = note.object as? Int,
                   let assignment = selectedAssignment else { return }

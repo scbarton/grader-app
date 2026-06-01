@@ -3,7 +3,8 @@ import PDFKit
 import AppKit
 
 extension Notification.Name {
-    static let navigateStudent = Notification.Name("GraderApp.navigateStudent")
+    static let navigateStudent    = Notification.Name("GraderApp.navigateStudent")
+    static let navigateRubricItem = Notification.Name("GraderApp.navigateRubricItem")
 }
 
 // MARK: - Annotation tool model
@@ -71,18 +72,43 @@ struct PDFViewerView: NSViewRepresentable {
             name: AnnotationToolbar.highlightNotification,
             object: nil
         )
+
+        // Cmd+Space focuses the PDF view from anywhere (score panel, sidebar, etc.)
+        context.coordinator.focusMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak view] event in
+            let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            if mods == .command, event.keyCode == 49 {  // 49 = Space
+                view?.window?.makeFirstResponder(view)
+                return nil  // consume event
+            }
+            return event
+        }
         return view
+    }
+
+    static func dismantleNSView(_ nsView: AnnotatingPDFView, coordinator: Coordinator) {
+        if let monitor = coordinator.focusMonitor {
+            NSEvent.removeMonitor(monitor)
+            coordinator.focusMonitor = nil
+        }
     }
 
     func updateNSView(_ pdfView: AnnotatingPDFView, context: Context) {
         if pdfView.currentTool != tool {
             pdfView.selectAnnotation(nil)
+            // Return focus to PDF view after toolbar button clicks so key shortcuts keep working
+            DispatchQueue.main.async { pdfView.window?.makeFirstResponder(pdfView) }
         }
         pdfView.currentTool = tool
         context.coordinator.toolBinding = _tool
         context.coordinator.student = student
         context.coordinator.rubricItems = assignment.rubricItems.sorted { $0.order < $1.order }
+
+        // Scroll to grade stamp when targeted problem changes
+        let oldTargetID = context.coordinator.targetedRubricItem?.id
         context.coordinator.targetedRubricItem = targetedRubricItem
+        if targetedRubricItem?.id != oldTargetID, let item = targetedRubricItem {
+            context.coordinator.scrollToGradeStamp(for: item)
+        }
 
         // Live-refresh grade annotations when scores change
         let newSnapshot = Dictionary(uniqueKeysWithValues: student.scores.map { ($0.rubricItemID, $0.points) })
@@ -105,6 +131,8 @@ struct PDFViewerView: NSViewRepresentable {
                 pdfView.autoScales = true
                 DispatchQueue.main.async { pdfView.autoScales = false }
             }
+            // Student changed — reclaim focus from sidebar so key shortcuts work immediately
+            DispatchQueue.main.async { pdfView.window?.makeFirstResponder(pdfView) }
         }
     }
 
@@ -119,10 +147,16 @@ struct PDFViewerView: NSViewRepresentable {
         var rubricItems: [RubricItem] = []
         var targetedRubricItem: RubricItem?
         var scoreSnapshot: [UUID: Double?] = [:]
+        var focusMonitor: Any?
+
+        // Keyboard grade input state
+        private var gradeInputBuffer = ""
+        private var gradeInputItemID: UUID? = nil
+        private var gradeInputStudentID: UUID? = nil
 
         func pdfView(_ view: AnnotatingPDFView, didClickAt point: CGPoint, on page: PDFPage, tool: AnnotationTool) {
             switch tool {
-            case .text:         showTextDialog(page: page, at: point)
+            case .text:         showTextAnnotation(page: page, at: point)
             case .stamp(let t): addStamp(type: t, page: page, at: point)
             default: break
             }
@@ -173,37 +207,19 @@ struct PDFViewerView: NSViewRepresentable {
             savePDF()
         }
 
-        private func showTextDialog(page: PDFPage, at point: CGPoint) {
-            let alert = NSAlert()
-            alert.messageText = "Add Comment"
-
-            let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
-            let textView = NSTextView(frame: scrollView.bounds)
-            textView.isEditable = true
-            textView.font = NSFont.systemFont(ofSize: 13)
-            scrollView.documentView = textView
-            scrollView.hasVerticalScroller = true
-            scrollView.borderType = .bezelBorder
-            alert.accessoryView = scrollView
-            alert.addButton(withTitle: "Add")
-            alert.addButton(withTitle: "Cancel")
-            NSApp.activate(ignoringOtherApps: true)
-
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-            let text = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return }
-
-            let lineCount = max(1, CGFloat(text.components(separatedBy: "\n").count))
-            let height = max(30, lineCount * 15 + 10)
-            let bounds = CGRect(x: point.x, y: point.y - height, width: 200, height: height)
-
-            let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
-            annotation.contents = text
-            annotation.font = NSFont.systemFont(ofSize: 11)
-            annotation.color = .clear                                          // transparent
-            annotation.fontColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1) // purple
-            annotation.font = NSFont.systemFont(ofSize: 16)
-            addAnnotationWithUndo(annotation, to: page)
+        private func showTextAnnotation(page: PDFPage, at point: CGPoint) {
+            pdfView?.showInlineComment(at: point, on: page) { [weak self] text in
+                guard let self else { return }
+                let lineCount = max(1, CGFloat(text.components(separatedBy: "\n").count))
+                let height = max(30, lineCount * 15 + 10)
+                let bounds = CGRect(x: point.x, y: point.y - height, width: 200, height: height)
+                let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
+                annotation.contents = text
+                annotation.color = .clear
+                annotation.fontColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
+                annotation.font = NSFont.systemFont(ofSize: 16)
+                self.addAnnotationWithUndo(annotation, to: page)
+            }
         }
 
         private func addStamp(type: AnnotationTool.StampType, page: PDFPage, at point: CGPoint) {
@@ -247,6 +263,19 @@ struct PDFViewerView: NSViewRepresentable {
             if didUpdate { savePDF() }
         }
 
+        func scrollToGradeStamp(for item: RubricItem) {
+            guard let doc = pdfView?.document else { return }
+            let tag = "grader.grade.\(item.id.uuidString)"
+            for i in 0..<doc.pageCount {
+                guard let page = doc.page(at: i) else { continue }
+                if let ann = page.annotations.first(where: { $0.userName == tag }) {
+                    let dest = PDFDestination(page: page, at: ann.bounds.origin)
+                    pdfView?.go(to: dest)
+                    return
+                }
+            }
+        }
+
         private func placeGradeStamp(for item: RubricItem, at point: CGPoint, on page: PDFPage) {
             guard let doc = pdfView?.document else { return }
 
@@ -261,7 +290,10 @@ struct PDFViewerView: NSViewRepresentable {
             let earnedText = score?.points.map { fmtPts($0) } ?? "—"
             let text = "\(item.name)\n\(earnedText) / \(fmtPts(item.maxPoints))"
 
-            let w: CGFloat = 120, h: CGFloat = 36
+            // On 90°/270° rotated pages the PDF axes are swapped, so swap w/h so the
+            // stamp appears wide and short rather than skinny and tall
+            let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
+            let (w, h): (CGFloat, CGFloat) = rotated ? (36, 120) : (120, 36)
             let bounds = CGRect(x: point.x, y: point.y - h / 2, width: w, height: h)
             let ann = makeGradeAnnotation(text: text, bounds: bounds, tag: tag)
             page.addAnnotation(ann)
@@ -302,8 +334,8 @@ struct PDFViewerView: NSViewRepresentable {
             let lineCount = CGFloat(lines.count)
             let h = lineCount * 10 * 1.5 + 8
             let w: CGFloat = 160
-            let pageH = page1.bounds(for: .mediaBox).height
-            let bounds = CGRect(x: 10, y: pageH - h - 10, width: w, height: h)
+            let pageRect = page1.bounds(for: .mediaBox)
+            let bounds = CGRect(x: pageRect.width - w - 10, y: pageRect.height - h - 10, width: w, height: h)
             page1.addAnnotation(makeGradeAnnotation(text: newText, bounds: bounds, tag: summaryTag))
         }
 
@@ -324,6 +356,39 @@ struct PDFViewerView: NSViewRepresentable {
 
         private func fmtPts(_ val: Double) -> String {
             val.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(val)) : String(format: "%.1f", val)
+        }
+
+        func handleGradeKey(_ event: NSEvent) -> Bool {
+            let raw = event.charactersIgnoringModifiers ?? ""
+            let isDigit = raw.count == 1 && raw.unicodeScalars.allSatisfy { CharacterSet.decimalDigits.contains($0) }
+            let isDot   = raw == "."
+            let isBack  = event.keyCode == 51  // ⌫
+            guard isDigit || isDot || isBack else { return false }
+            guard let item = targetedRubricItem, let student = student else { return false }
+
+            // Reset buffer when problem or student changes
+            if item.id != gradeInputItemID || student.id != gradeInputStudentID {
+                gradeInputBuffer = ""
+                gradeInputItemID    = item.id
+                gradeInputStudentID = student.id
+            }
+
+            if isDigit || isDot {
+                if isDot && gradeInputBuffer.contains(".") { return true }  // one dot only
+                gradeInputBuffer += raw
+            } else {
+                if gradeInputBuffer.isEmpty { return false }  // let annotation-delete handle ⌫
+                gradeInputBuffer.removeLast()
+            }
+
+            guard let score = student.scores.first(where: { $0.rubricItemID == item.id }) else { return true }
+            let parseStr = gradeInputBuffer.hasSuffix(".") ? String(gradeInputBuffer.dropLast()) : gradeInputBuffer
+            if parseStr.isEmpty {
+                score.points = nil
+            } else if let value = Double(parseStr) {
+                score.points = min(max(0, value), item.maxPoints)
+            }
+            return true
         }
 
         private func savePDF() {
@@ -350,6 +415,34 @@ protocol AnnotationDelegate: AnyObject {
     func pdfViewApplyHighlight(_ view: AnnotatingPDFView)
     func pdfViewHandleGradeClick(at point: CGPoint, on page: PDFPage)
     func removeAnnotationWithUndo(_ annotation: PDFAnnotation)
+    func handleGradeKey(_ event: NSEvent) -> Bool
+}
+
+// MARK: - Inline comment editor (NSTextView that commits on resign or Escape)
+
+private final class InlineTextView: NSTextView {
+    var onEnd: ((String, Bool) -> Void)?
+    private var ended = false
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { end(cancelled: true); return }  // Escape → cancel
+        if event.keyCode == 36 && event.modifierFlags.contains(.command) {
+            end(cancelled: false); return  // Cmd+Return → commit
+        }
+        super.keyDown(with: event)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let ok = super.resignFirstResponder()
+        if ok { end(cancelled: false) }
+        return ok
+    }
+
+    private func end(cancelled: Bool) {
+        guard !ended else { return }
+        ended = true
+        onEnd?(string, cancelled)
+    }
 }
 
 // MARK: - Custom PDFView
@@ -367,7 +460,55 @@ final class AnnotatingPDFView: PDFView {
     private var dragStartPagePoint: CGPoint?
     private var dragOriginalOrigin: CGPoint?
 
+    // Inline comment editor overlay
+    private var inlineEditorContainer: NSView?
+
+    func showInlineComment(at pagePoint: CGPoint, on page: PDFPage, onCommit: @escaping (String) -> Void) {
+        inlineEditorContainer?.removeFromSuperview()
+        inlineEditorContainer = nil
+
+        let viewPt = convert(pagePoint, from: page)
+        let w: CGFloat = 200, h: CGFloat = 72
+
+        let container = NSView(frame: NSRect(x: viewPt.x, y: viewPt.y, width: w, height: h))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor(red: 1, green: 251/255, blue: 179/255, alpha: 0.97).cgColor
+        container.layer?.cornerRadius = 4
+        container.layer?.borderWidth = 0.75
+        container.layer?.borderColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 0.5).cgColor
+        container.layer?.shadowOpacity = 0.18
+        container.layer?.shadowRadius  = 6
+        container.layer?.shadowOffset  = .zero
+
+        let tv = InlineTextView(frame: container.bounds.insetBy(dx: 4, dy: 4))
+        tv.autoresizingMask = [.width, .height]
+        tv.isEditable = true
+        tv.isRichText = false
+        tv.isVerticallyResizable = true
+        tv.font = NSFont.systemFont(ofSize: 13)
+        tv.textColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
+        tv.backgroundColor = .clear
+        tv.drawsBackground = false
+        tv.insertionPointColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
+        container.addSubview(tv)
+
+        inlineEditorContainer = container
+        addSubview(container)
+        window?.makeFirstResponder(tv)
+
+        tv.onEnd = { [weak self, weak container] text, cancelled in
+            container?.removeFromSuperview()
+            if let self, self.inlineEditorContainer === container { self.inlineEditorContainer = nil }
+            self?.window?.makeFirstResponder(self)
+            guard !cancelled else { return }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { onCommit(trimmed) }
+        }
+    }
+
     override func mouseDown(with event: NSEvent) {
+        // Clicking anywhere on the PDF view claims focus so key shortcuts always work
+        if inlineEditorContainer == nil { window?.makeFirstResponder(self) }
         let loc = pageLocation(for: event)
 
         switch currentTool {
@@ -468,8 +609,19 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func keyDown(with event: NSEvent) {
-        // Cmd+Up/Down navigates students while keeping the targeted rubric item
-        if event.modifierFlags.contains(.command) {
+        let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
+
+        // Cmd+Option+Up/Down: cycle through rubric problems
+        if mods == [.command, .option] {
+            switch event.keyCode {
+            case 126: NotificationCenter.default.post(name: .navigateRubricItem, object: -1); return
+            case 125: NotificationCenter.default.post(name: .navigateRubricItem, object:  1); return
+            default: break
+            }
+        }
+
+        // Cmd+Up/Down: navigate students
+        if mods == .command {
             switch event.keyCode {
             case 126: NotificationCenter.default.post(name: .navigateStudent, object: -1); return
             case 125: NotificationCenter.default.post(name: .navigateStudent, object:  1); return
@@ -477,14 +629,30 @@ final class AnnotatingPDFView: PDFView {
             }
         }
 
+        // Digits and "." → direct grade entry; ⌫ only if no annotation is selected
+        if mods.isEmpty || mods == .shift {
+            let raw = event.charactersIgnoringModifiers ?? ""
+            let isDigitOrDot = raw.count == 1 &&
+                raw.unicodeScalars.allSatisfy { CharacterSet.decimalDigits.union(.init(charactersIn: ".")).contains($0) }
+            let isBackForGrade = event.keyCode == 51 && selectedAnnotation == nil
+            if (isDigitOrDot || isBackForGrade) && annotationDelegate?.handleGradeKey(event) == true { return }
+        }
+
         let ch = event.charactersIgnoringModifiers?.lowercased()
 
-        // Keys only fire when PDF view has focus — won't interfere with sidebar list
+        // Annotation tool shortcuts (PDF view must have focus — won't fire in sidebar)
         switch ch {
+        case "m": annotationDelegate?.pdfViewDidRequestTool(.pointer);            return
         case "c": annotationDelegate?.pdfViewDidRequestTool(.text);              return
         case "h": annotationDelegate?.pdfViewApplyHighlight(self);               return
         case "d": annotationDelegate?.pdfViewDidRequestTool(.delete);            return
         case "g": annotationDelegate?.pdfViewDidRequestTool(.grade);             return
+        case "r":
+            if let page = currentPage {
+                page.rotation = (page.rotation + 90) % 360
+                annotationDelegate?.pdfViewDidModify(self)
+            }
+            return
         case "v": annotationDelegate?.pdfViewDidRequestTool(.stamp(.correct));   return
         case "x": annotationDelegate?.pdfViewDidRequestTool(.stamp(.incorrect)); return
         case "k": annotationDelegate?.pdfViewDidRequestTool(.stamp(.partial));   return

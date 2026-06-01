@@ -155,12 +155,7 @@ struct ScoreRow: View {
                 }
             }
 
-            TextField("Comment…", text: $score.comment, axis: .vertical)
-                .font(.caption)
-                .lineLimit(2...4)
-                .textFieldStyle(.plain)
-                .foregroundStyle(.secondary)
-        }
+}
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(isTargeted ? Color.accentColor.opacity(0.10) : Color.clear)
