@@ -61,8 +61,7 @@ struct ContentView: View {
             guard !sorted.isEmpty else { return }
             if let current = targetedRubricItem,
                let idx = sorted.firstIndex(where: { $0.id == current.id }) {
-                let newIdx = idx + delta
-                if newIdx >= 0, newIdx < sorted.count { targetedRubricItem = sorted[newIdx] }
+                targetedRubricItem = sorted[(idx + delta + sorted.count) % sorted.count]
             } else {
                 targetedRubricItem = sorted.first
             }
@@ -74,10 +73,7 @@ struct ContentView: View {
             guard !students.isEmpty else { return }
             if let current = selectedStudent,
                let idx = students.firstIndex(where: { $0.id == current.id }) {
-                let newIdx = idx + delta
-                if newIdx >= 0, newIdx < students.count {
-                    selectedStudent = students[newIdx]
-                }
+                selectedStudent = students[(idx + delta + students.count) % students.count]
             } else {
                 selectedStudent = students.first
             }
