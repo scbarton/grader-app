@@ -48,6 +48,7 @@ struct PDFViewerView: NSViewRepresentable {
     let assignment: Assignment
     let bundleURL: URL
     @Binding var tool: AnnotationTool
+    var targetedRubricItem: RubricItem?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -77,6 +78,7 @@ struct PDFViewerView: NSViewRepresentable {
         context.coordinator.toolBinding = _tool
         context.coordinator.student = student
         context.coordinator.rubricItems = assignment.rubricItems.sorted { $0.order < $1.order }
+        context.coordinator.targetedRubricItem = targetedRubricItem
 
         let url: URL? = student.pdfRelativePath.isEmpty
             ? nil
@@ -102,6 +104,7 @@ struct PDFViewerView: NSViewRepresentable {
         var toolBinding: Binding<AnnotationTool>?
         var student: Student?
         var rubricItems: [RubricItem] = []
+        var targetedRubricItem: RubricItem?
 
         func pdfView(_ view: AnnotatingPDFView, didClickAt point: CGPoint, on page: PDFPage, tool: AnnotationTool) {
             switch tool {
@@ -202,36 +205,9 @@ struct PDFViewerView: NSViewRepresentable {
 
         // MARK: - Grade stamping
 
-        func pdfViewShowGradePicker(at point: CGPoint, on page: PDFPage, event: NSEvent) {
-            let sorted = rubricItems
-            let menu = NSMenu()
-
-            if sorted.isEmpty {
-                let item = NSMenuItem(title: "Add rubric items first", action: nil, keyEquivalent: "")
-                item.isEnabled = false
-                menu.addItem(item)
-            } else {
-                for rItem in sorted {
-                    let score = student?.scores.first { $0.rubricItemID == rItem.id }
-                    let scoreText = score?.points.map { "\(fmtPts($0))/\(fmtPts(rItem.maxPoints))" }
-                        ?? "—/\(fmtPts(rItem.maxPoints))"
-                    let mi = NSMenuItem(
-                        title: "\(rItem.name): \(scoreText)",
-                        action: #selector(gradeItemSelected(_:)),
-                        keyEquivalent: ""
-                    )
-                    mi.target = self
-                    mi.representedObject = GradePickerData(rubricItem: rItem, pagePoint: point, page: page)
-                    menu.addItem(mi)
-                }
-            }
-            guard let view = pdfView else { return }
-            NSMenu.popUpContextMenu(menu, with: event, for: view)
-        }
-
-        @objc private func gradeItemSelected(_ sender: NSMenuItem) {
-            guard let data = sender.representedObject as? GradePickerData else { return }
-            placeGradeStamp(for: data.rubricItem, at: data.pagePoint, on: data.page)
+        func pdfViewHandleGradeClick(at point: CGPoint, on page: PDFPage) {
+            guard let item = targetedRubricItem else { return }  // no-op if nothing targeted
+            placeGradeStamp(for: item, at: point, on: page)
         }
 
         private func placeGradeStamp(for item: RubricItem, at point: CGPoint, on page: PDFPage) {
@@ -318,15 +294,6 @@ struct PDFViewerView: NSViewRepresentable {
     }
 }
 
-// Helper class to carry grade picker selection data through NSMenu
-private final class GradePickerData: NSObject {
-    let rubricItem: RubricItem
-    let pagePoint: CGPoint
-    let page: PDFPage
-    init(rubricItem: RubricItem, pagePoint: CGPoint, page: PDFPage) {
-        self.rubricItem = rubricItem; self.pagePoint = pagePoint; self.page = page
-    }
-}
 
 // MARK: - Annotation delegate protocol
 
@@ -335,7 +302,7 @@ protocol AnnotationDelegate: AnyObject {
     func pdfViewDidModify(_ view: AnnotatingPDFView)
     func pdfViewDidRequestTool(_ tool: AnnotationTool)
     func pdfViewApplyHighlight(_ view: AnnotatingPDFView)
-    func pdfViewShowGradePicker(at point: CGPoint, on page: PDFPage, event: NSEvent)
+    func pdfViewHandleGradeClick(at point: CGPoint, on page: PDFPage)
     func removeAnnotationWithUndo(_ annotation: PDFAnnotation)
 }
 
@@ -366,7 +333,7 @@ final class AnnotatingPDFView: PDFView {
 
         case .grade:
             if let loc {
-                annotationDelegate?.pdfViewShowGradePicker(at: loc.point, on: loc.page, event: event)
+                annotationDelegate?.pdfViewHandleGradeClick(at: loc.point, on: loc.page)
             }
 
         case .highlight:

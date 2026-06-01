@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var selectedAssignment: Assignment?
     @State private var selectedStudent: Student?
     @State private var annotationTool: AnnotationTool = .pointer
+    @State private var targetedRubricItem: RubricItem?
 
     var body: some View {
         NavigationSplitView {
@@ -23,9 +24,9 @@ struct ContentView: View {
         } detail: {
             if let student = selectedStudent, let assignment = selectedAssignment {
                 HSplitView {
-                    PDFViewerView(student: student, assignment: assignment, bundleURL: bundleURL, tool: $annotationTool)
+                    PDFViewerView(student: student, assignment: assignment, bundleURL: bundleURL, tool: $annotationTool, targetedRubricItem: targetedRubricItem)
                         .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
-                    ScorePanelView(student: student, assignment: assignment)
+                    ScorePanelView(student: student, assignment: assignment, tool: annotationTool, targetedRubricItem: $targetedRubricItem)
                         .frame(minWidth: 240, maxWidth: 340, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

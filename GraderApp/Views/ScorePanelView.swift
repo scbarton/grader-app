@@ -3,6 +3,8 @@ import SwiftUI
 struct ScorePanelView: View {
     @Bindable var student: Student
     let assignment: Assignment
+    var tool: AnnotationTool = .pointer
+    @Binding var targetedRubricItem: RubricItem?
 
     private var sortedRubric: [RubricItem] {
         assignment.rubricItems.sorted(by: { $0.order < $1.order })
@@ -46,7 +48,10 @@ struct ScorePanelView: View {
                         ForEach(sortedRubric) { item in
                             ScoreRow(
                                 item: item,
-                                score: ensureScore(for: item)
+                                score: ensureScore(for: item),
+                                isGradeMode: tool == .grade,
+                                isTargeted: targetedRubricItem?.id == item.id,
+                                onTarget: { targetedRubricItem = item }
                             )
                             Divider()
                         }
@@ -85,6 +90,9 @@ struct ScorePanelView: View {
 struct ScoreRow: View {
     let item: RubricItem
     @Bindable var score: Score
+    var isGradeMode: Bool = false
+    var isTargeted: Bool = false
+    var onTarget: () -> Void = {}
 
     @State private var pointsText: String = ""
     @FocusState private var isPointsFocused: Bool
@@ -92,9 +100,20 @@ struct ScoreRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
+                // Target button — only visible in grade mode
+                if isGradeMode {
+                    Button(action: onTarget) {
+                        Text(isTargeted ? "🎯" : "◎")
+                            .font(.system(size: isTargeted ? 15 : 13))
+                            .opacity(isTargeted ? 1 : 0.35)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(isTargeted ? "Targeted — click PDF to stamp" : "Target this problem")
+                }
                 Text(item.name)
                     .font(.subheadline)
-                    .fontWeight(.medium)
+                    .fontWeight(isTargeted && isGradeMode ? .bold : .medium)
+                    .foregroundStyle(isTargeted && isGradeMode ? Color(red: 0, green: 0.4, blue: 0.12) : .primary)
                 Spacer()
                 HStack(spacing: 4) {
                     TextField("—", text: $pointsText)
