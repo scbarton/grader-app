@@ -1,0 +1,33 @@
+name: GraderApp
+options:
+  bundleIdPrefix: com.scott
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: true
+
+targets:
+  GraderApp:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: GraderApp
+        excludes:
+          - Resources/Info.plist
+    resources:
+      - GraderApp/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.scott.GraderApp
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        INFOPLIST_FILE: GraderApp/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: GraderApp/Resources/GraderApp.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        DEVELOPMENT_TEAM: ""
+        SWIFT_EMIT_LOC_STRINGS: YES
+    dependencies:
+      - framework: PDFKit.framework
+        embed: false

@@ -1,0 +1,402 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0592B7D70983F3197546F666 /* AssignmentSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */; };
+		0E51F28CFC775B3D65F192EC /* ScorePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D5F4E75823E072D0676326 /* ScorePanelView.swift */; };
+		40CB3918CFA090945C7472EA /* BookmarkHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03206A13EBB7A8E8A1E5135 /* BookmarkHelper.swift */; };
+		57DB48469F9F2CD9F50EC60B /* ImporterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4055BA06695FE4C851DD5349 /* ImporterView.swift */; };
+		84E17746A764B1A3357C9CDB /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A31B07B8BB7B750A371BA3 /* Models.swift */; };
+		86AC3C1C9686D16B40B708BC /* AnnotationToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718198BEA16FAE38B63AF8CE /* AnnotationToolbar.swift */; };
+		8F97CD5529AFADCE48930C71 /* PDFScaler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B929FCD8DF21B160D8694496 /* PDFScaler.swift */; };
+		93A44FCCB28930712E5989FE /* GraderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F8A15347DB9A96F63642B5 /* GraderApp.swift */; };
+		CB412AE0C660E0509EB7B5A3 /* RubricEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16F440F44CFFB58CDE84D8C3 /* RubricEditorView.swift */; };
+		D1C5398C9D4E5F4D64F2C66D /* RosterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */; };
+		D483966583C864E9F985EB37 /* PDFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E35F038E43CA7973462169 /* PDFExporter.swift */; };
+		DEF406FD7E27D6BF05D0A18A /* PDFViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA76B5EE9992BF5FCFC9939 /* PDFViewerView.swift */; };
+		E4AC5BEEA71BC3502FE211F1 /* PDFKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 646A944E9F7BE0A9A59FFA37 /* PDFKit.framework */; };
+		E9C83BF8D4775F2D72D035D4 /* CSVExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95580A073C3C1A209DA1EEB1 /* CSVExporter.swift */; };
+		F39EE9813B6609171E9AF48B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89AB81F683A0C3BA98266F55 /* ContentView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0FA76B5EE9992BF5FCFC9939 /* PDFViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFViewerView.swift; sourceTree = "<group>"; };
+		12D5F4E75823E072D0676326 /* ScorePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScorePanelView.swift; sourceTree = "<group>"; };
+		16F440F44CFFB58CDE84D8C3 /* RubricEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RubricEditorView.swift; sourceTree = "<group>"; };
+		37A31B07B8BB7B750A371BA3 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		4055BA06695FE4C851DD5349 /* ImporterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImporterView.swift; sourceTree = "<group>"; };
+		455A879C62655FDBAE68387E /* GraderApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GraderApp.entitlements; sourceTree = "<group>"; };
+		646A944E9F7BE0A9A59FFA37 /* PDFKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = PDFKit.framework; sourceTree = "<group>"; };
+		66E35F038E43CA7973462169 /* PDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFExporter.swift; sourceTree = "<group>"; };
+		718198BEA16FAE38B63AF8CE /* AnnotationToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationToolbar.swift; sourceTree = "<group>"; };
+		89AB81F683A0C3BA98266F55 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		95580A073C3C1A209DA1EEB1 /* CSVExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVExporter.swift; sourceTree = "<group>"; };
+		9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentSidebarView.swift; sourceTree = "<group>"; };
+		A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosterView.swift; sourceTree = "<group>"; };
+		A8F8A15347DB9A96F63642B5 /* GraderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraderApp.swift; sourceTree = "<group>"; };
+		B0718D65A2368FFA48909360 /* GraderApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GraderApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B929FCD8DF21B160D8694496 /* PDFScaler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFScaler.swift; sourceTree = "<group>"; };
+		E03206A13EBB7A8E8A1E5135 /* BookmarkHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkHelper.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		72B4A7AFE6234165C28B653D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E4AC5BEEA71BC3502FE211F1 /* PDFKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0BDB387731DA15CF71A8004B /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				718198BEA16FAE38B63AF8CE /* AnnotationToolbar.swift */,
+				9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */,
+				4055BA06695FE4C851DD5349 /* ImporterView.swift */,
+				0FA76B5EE9992BF5FCFC9939 /* PDFViewerView.swift */,
+				A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */,
+				16F440F44CFFB58CDE84D8C3 /* RubricEditorView.swift */,
+				12D5F4E75823E072D0676326 /* ScorePanelView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		3051C859F0D3F3B73626D024 = {
+			isa = PBXGroup;
+			children = (
+				81F28CA52DC053D450D9423B /* GraderApp */,
+				886E8F91E39E2916F80B05E7 /* Frameworks */,
+				BD6AA34C7DDEE80BAB485346 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		437ECB64F0405FE3615BA516 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				455A879C62655FDBAE68387E /* GraderApp.entitlements */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		81F28CA52DC053D450D9423B /* GraderApp */ = {
+			isa = PBXGroup;
+			children = (
+				A251DCC9BE02FA48F9A7A19E /* Helpers */,
+				437ECB64F0405FE3615BA516 /* Resources */,
+				0BDB387731DA15CF71A8004B /* Views */,
+				89AB81F683A0C3BA98266F55 /* ContentView.swift */,
+				A8F8A15347DB9A96F63642B5 /* GraderApp.swift */,
+				37A31B07B8BB7B750A371BA3 /* Models.swift */,
+			);
+			path = GraderApp;
+			sourceTree = "<group>";
+		};
+		886E8F91E39E2916F80B05E7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				646A944E9F7BE0A9A59FFA37 /* PDFKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A251DCC9BE02FA48F9A7A19E /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				E03206A13EBB7A8E8A1E5135 /* BookmarkHelper.swift */,
+				95580A073C3C1A209DA1EEB1 /* CSVExporter.swift */,
+				66E35F038E43CA7973462169 /* PDFExporter.swift */,
+				B929FCD8DF21B160D8694496 /* PDFScaler.swift */,
+			);
+			path = Helpers;
+			sourceTree = "<group>";
+		};
+		BD6AA34C7DDEE80BAB485346 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B0718D65A2368FFA48909360 /* GraderApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B5E59F19051A73ED71D4921F /* GraderApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5F246D80BD66D4C4278D0E3C /* Build configuration list for PBXNativeTarget "GraderApp" */;
+			buildPhases = (
+				412E829451121242804AADCB /* Sources */,
+				72B4A7AFE6234165C28B653D /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GraderApp;
+			packageProductDependencies = (
+			);
+			productName = GraderApp;
+			productReference = B0718D65A2368FFA48909360 /* GraderApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4869B4D74B1FC1FF11F5C3D1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					B5E59F19051A73ED71D4921F = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = F309EA0D3024C63946BADC5F /* Build configuration list for PBXProject "GraderApp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3051C859F0D3F3B73626D024;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B5E59F19051A73ED71D4921F /* GraderApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		412E829451121242804AADCB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				86AC3C1C9686D16B40B708BC /* AnnotationToolbar.swift in Sources */,
+				0592B7D70983F3197546F666 /* AssignmentSidebarView.swift in Sources */,
+				40CB3918CFA090945C7472EA /* BookmarkHelper.swift in Sources */,
+				E9C83BF8D4775F2D72D035D4 /* CSVExporter.swift in Sources */,
+				F39EE9813B6609171E9AF48B /* ContentView.swift in Sources */,
+				93A44FCCB28930712E5989FE /* GraderApp.swift in Sources */,
+				57DB48469F9F2CD9F50EC60B /* ImporterView.swift in Sources */,
+				84E17746A764B1A3357C9CDB /* Models.swift in Sources */,
+				D483966583C864E9F985EB37 /* PDFExporter.swift in Sources */,
+				8F97CD5529AFADCE48930C71 /* PDFScaler.swift in Sources */,
+				DEF406FD7E27D6BF05D0A18A /* PDFViewerView.swift in Sources */,
+				D1C5398C9D4E5F4D64F2C66D /* RosterView.swift in Sources */,
+				CB412AE0C660E0509EB7B5A3 /* RubricEditorView.swift in Sources */,
+				0E51F28CFC775B3D65F192EC /* ScorePanelView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3C91E974ED8C172AA512F172 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = GraderApp/Resources/GraderApp.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = GraderApp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.scott.GraderApp;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		409E2FDAD4256B9EC5175EC2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		82981529BB6C51655D09003D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = GraderApp/Resources/GraderApp.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = GraderApp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.scott.GraderApp;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		F214D99752766698533FBB8C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5F246D80BD66D4C4278D0E3C /* Build configuration list for PBXNativeTarget "GraderApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				82981529BB6C51655D09003D /* Debug */,
+				3C91E974ED8C172AA512F172 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F309EA0D3024C63946BADC5F /* Build configuration list for PBXProject "GraderApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F214D99752766698533FBB8C /* Debug */,
+				409E2FDAD4256B9EC5175EC2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4869B4D74B1FC1FF11F5C3D1 /* Project object */;
+}

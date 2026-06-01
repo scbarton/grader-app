@@ -1,0 +1,22 @@
+# Xcode user data
+*.xcuserdata/
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Build artifacts
+DerivedData/
+build/
+*.o
+*.d
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# SwiftPM
+.swiftpm/
+
+# Sensitive / local-only
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

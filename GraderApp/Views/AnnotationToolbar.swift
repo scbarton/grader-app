@@ -1,0 +1,66 @@
+import SwiftUI
+
+struct AnnotationToolbar: ToolbarContent {
+    @Binding var tool: AnnotationTool
+
+    static let highlightNotification = Notification.Name("addHighlight")
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .principal) {
+
+            ToolButton(label: "Select", icon: "arrow.up.left", active: tool == .pointer) {
+                tool = .pointer
+            }
+            .help("Select annotation · click to highlight, then ⌫ or right-click to delete")
+
+            ToolButton(label: "Delete", icon: "trash", active: tool == .delete) {
+                tool = .delete
+            }
+            .help("Delete annotation · click any annotation to remove it · shortcut: D")
+
+            ToolButton(label: "Comment", icon: "text.bubble", active: tool == .text) {
+                tool = .text
+            }
+            .help("Add text comment · click anywhere on the PDF · shortcut: C")
+
+            Button {
+                NotificationCenter.default.post(name: Self.highlightNotification, object: nil)
+            } label: {
+                Label("Highlight", systemImage: "highlighter")
+            }
+            .help("Highlight selected text · select text first, then click · shortcut: H")
+
+            Divider()
+
+            ForEach(AnnotationTool.StampType.allCases, id: \.self) { stampType in
+                Button {
+                    tool = .stamp(stampType)
+                } label: {
+                    Text(stampType.symbol)
+                        .font(.system(size: 18))
+                        .frame(width: 32, height: 22)
+                }
+                .background(tool == .stamp(stampType) ? Color.accentColor.opacity(0.15) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .help(stampType.label + " · select tool, then click on PDF")
+            }
+        }
+    }
+}
+
+private struct ToolButton: View {
+    let label: String
+    let icon: String
+    let active: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(label, systemImage: icon)
+                .labelStyle(.iconOnly)
+                .frame(width: 28, height: 22)
+        }
+        .background(active ? Color.accentColor.opacity(0.15) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+}
