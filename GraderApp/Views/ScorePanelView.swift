@@ -3,7 +3,6 @@ import SwiftUI
 struct ScorePanelView: View {
     @Bindable var student: Student
     let assignment: Assignment
-    var tool: AnnotationTool = .pointer
     @Binding var targetedRubricItem: RubricItem?
 
     private var sortedRubric: [RubricItem] {
@@ -49,7 +48,6 @@ struct ScorePanelView: View {
                             ScoreRow(
                                 item: item,
                                 score: ensureScore(for: item),
-                                isGradeMode: tool == .grade,
                                 isTargeted: targetedRubricItem?.id == item.id,
                                 onTarget: { targetedRubricItem = item }
                             )
@@ -90,7 +88,6 @@ struct ScorePanelView: View {
 struct ScoreRow: View {
     let item: RubricItem
     @Bindable var score: Score
-    var isGradeMode: Bool = false
     var isTargeted: Bool = false
     var onTarget: () -> Void = {}
 
@@ -100,20 +97,17 @@ struct ScoreRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                // Target button — only visible in grade mode
-                if isGradeMode {
-                    Button(action: onTarget) {
-                        Text(isTargeted ? "🎯" : "◎")
-                            .font(.system(size: isTargeted ? 15 : 13))
-                            .opacity(isTargeted ? 1 : 0.35)
-                    }
-                    .buttonStyle(.borderless)
-                    .help(isTargeted ? "Targeted — click PDF to stamp" : "Target this problem")
+                Button(action: onTarget) {
+                    Text(isTargeted ? "🎯" : "◎")
+                        .font(.system(size: isTargeted ? 15 : 13))
+                        .opacity(isTargeted ? 1 : 0.35)
                 }
+                .buttonStyle(.borderless)
+                .help(isTargeted ? "Targeted — click PDF in grade mode to stamp" : "Target this problem")
                 Text(item.name)
                     .font(.subheadline)
-                    .fontWeight(isTargeted && isGradeMode ? .bold : .medium)
-                    .foregroundStyle(isTargeted && isGradeMode ? Color(red: 0, green: 0.4, blue: 0.12) : .primary)
+                    .fontWeight(isTargeted ? .bold : .medium)
+                    .foregroundStyle(isTargeted ? Color.accentColor : .primary)
                 Spacer()
                 HStack(spacing: 4) {
                     TextField("—", text: $pointsText)
@@ -136,27 +130,28 @@ struct ScoreRow: View {
                 }
             }
 
-            // Quick-set buttons
-            HStack(spacing: 4) {
-                ForEach(quickValues(for: item.maxPoints), id: \.self) { val in
-                    Button(formatPts(val)) {
-                        score.points = val
-                        pointsText = formatPts(val)
+            // Quick-set buttons — horizontal scroll so they never overflow the panel
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(quickValues(for: item.maxPoints), id: \.self) { val in
+                        Button(formatPts(val)) {
+                            score.points = val
+                            pointsText = formatPts(val)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .foregroundStyle(score.points == val ? .white : .primary)
+                        .background(score.points == val ? Color.accentColor : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
-                    .foregroundStyle(score.points == val ? .white : .primary)
-                    .background(score.points == val ? Color.accentColor : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-                Spacer()
-                if score.points != nil {
-                    Button(action: clearScore) {
-                        Image(systemName: "xmark")
+                    if score.points != nil {
+                        Button(action: clearScore) {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.borderless)
+                        .controlSize(.mini)
+                        .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.borderless)
-                    .controlSize(.mini)
-                    .foregroundStyle(.secondary)
                 }
             }
 
@@ -168,6 +163,7 @@ struct ScoreRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .background(isTargeted ? Color.accentColor.opacity(0.10) : Color.clear)
     }
 
     private func commitPoints() {

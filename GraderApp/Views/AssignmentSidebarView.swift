@@ -12,10 +12,11 @@ struct AssignmentSidebarView: View {
     @Binding var selectedStudent: Student?
 
     @State private var showingNewAssignment = false
-    @State private var showingRubricEditor = false
-    @State private var showingImporter = false
     @State private var showingRoster = false
     @State private var collapsedIDs: Set<UUID> = []
+    // Dedicated local state so assignment and sheet flag update in the same cycle
+    @State private var importerAssignment: Assignment?
+    @State private var rubricAssignment: Assignment?
 
     var body: some View {
         List(selection: $selectedStudent) {
@@ -27,8 +28,8 @@ struct AssignmentSidebarView: View {
                         set: { if $0 { collapsedIDs.remove(assignment.id) } else { collapsedIDs.insert(assignment.id) } }
                     ),
                     onRemoveStudent: { removeStudent($0, from: assignment) },
-                    onEditRubric:   { selectedAssignment = assignment; showingRubricEditor = true },
-                    onImport:       { selectedAssignment = assignment; showingImporter = true },
+                    onEditRubric:   { rubricAssignment = assignment },
+                    onImport:       { importerAssignment = assignment },
                     onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
                     onDelete:       { deleteAssignment(assignment) }
                 )
@@ -66,20 +67,25 @@ struct AssignmentSidebarView: View {
         .sheet(isPresented: $showingNewAssignment) {
             NewAssignmentSheet(isPresented: $showingNewAssignment)
         }
-        .sheet(isPresented: $showingRubricEditor) {
-            if let assignment = selectedAssignment {
-                RubricEditorView(assignment: assignment, isPresented: $showingRubricEditor)
-            }
-        }
-        .sheet(isPresented: $showingImporter) {
-            if let assignment = selectedAssignment {
-                ImporterView(
-                    assignment: assignment,
-                    isPresented: $showingImporter,
-                    roster: roster,
-                    courseManager: courseManager
+        .sheet(item: $rubricAssignment) { assignment in
+            RubricEditorView(
+                assignment: assignment,
+                isPresented: Binding(
+                    get: { rubricAssignment != nil },
+                    set: { if !$0 { rubricAssignment = nil } }
                 )
-            }
+            )
+        }
+        .sheet(item: $importerAssignment) { assignment in
+            ImporterView(
+                assignment: assignment,
+                isPresented: Binding(
+                    get: { importerAssignment != nil },
+                    set: { if !$0 { importerAssignment = nil } }
+                ),
+                roster: roster,
+                bundleURL: bundleURL
+            )
         }
         .sheet(isPresented: $showingRoster) {
             RosterView(isPresented: $showingRoster)

@@ -2,6 +2,10 @@ import SwiftUI
 import PDFKit
 import AppKit
 
+extension Notification.Name {
+    static let navigateStudent = Notification.Name("GraderApp.navigateStudent")
+}
+
 // MARK: - Annotation tool model
 
 enum AnnotationTool: Equatable, Hashable {
@@ -80,6 +84,15 @@ struct PDFViewerView: NSViewRepresentable {
         context.coordinator.rubricItems = assignment.rubricItems.sorted { $0.order < $1.order }
         context.coordinator.targetedRubricItem = targetedRubricItem
 
+        // Live-refresh grade annotations when scores change
+        let newSnapshot = Dictionary(uniqueKeysWithValues: student.scores.map { ($0.rubricItemID, $0.points) })
+        if newSnapshot != context.coordinator.scoreSnapshot {
+            context.coordinator.scoreSnapshot = newSnapshot
+            if context.coordinator.pdfView?.document != nil {
+                context.coordinator.refreshGradeAnnotations()
+            }
+        }
+
         let url: URL? = student.pdfRelativePath.isEmpty
             ? nil
             : bundleURL.appendingPathComponent(student.pdfRelativePath)
@@ -105,6 +118,7 @@ struct PDFViewerView: NSViewRepresentable {
         var student: Student?
         var rubricItems: [RubricItem] = []
         var targetedRubricItem: RubricItem?
+        var scoreSnapshot: [UUID: Double?] = [:]
 
         func pdfView(_ view: AnnotatingPDFView, didClickAt point: CGPoint, on page: PDFPage, tool: AnnotationTool) {
             switch tool {
@@ -186,8 +200,9 @@ struct PDFViewerView: NSViewRepresentable {
             let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
             annotation.contents = text
             annotation.font = NSFont.systemFont(ofSize: 11)
-            annotation.color = NSColor(calibratedRed: 1, green: 0.95, blue: 0.4, alpha: 0.9)
-            annotation.fontColor = .black
+            annotation.color = .clear                                          // transparent
+            annotation.fontColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1) // purple
+            annotation.font = NSFont.systemFont(ofSize: 16)
             addAnnotationWithUndo(annotation, to: page)
         }
 
@@ -208,6 +223,28 @@ struct PDFViewerView: NSViewRepresentable {
         func pdfViewHandleGradeClick(at point: CGPoint, on page: PDFPage) {
             guard let item = targetedRubricItem else { return }  // no-op if nothing targeted
             placeGradeStamp(for: item, at: point, on: page)
+        }
+
+        func refreshGradeAnnotations() {
+            guard let doc = pdfView?.document, let student = student else { return }
+            var didUpdate = false
+            for item in rubricItems {
+                let tag = "grader.grade.\(item.id.uuidString)"
+                let score = student.scores.first { $0.rubricItemID == item.id }
+                let earnedText = score?.points.map { fmtPts($0) } ?? "—"
+                let newText = "\(item.name)\n\(earnedText) / \(fmtPts(item.maxPoints))"
+                for i in 0..<doc.pageCount {
+                    guard let page = doc.page(at: i) else { continue }
+                    for ann in page.annotations where ann.userName == tag {
+                        if ann.contents != newText {
+                            ann.contents = newText
+                            didUpdate = true
+                        }
+                    }
+                }
+            }
+            updateSummary()
+            if didUpdate { savePDF() }
         }
 
         private func placeGradeStamp(for item: RubricItem, at point: CGPoint, on page: PDFPage) {
@@ -236,12 +273,8 @@ struct PDFViewerView: NSViewRepresentable {
         private func updateSummary() {
             guard let doc = pdfView?.document,
                   let page1 = doc.page(at: 0),
-                  let student = student else { return }
-
-            let summaryTag = "grader.summary"
-            page1.annotations.filter { $0.userName == summaryTag }.forEach { page1.removeAnnotation($0) }
-
-            guard !rubricItems.isEmpty else { return }
+                  let student = student,
+                  !rubricItems.isEmpty else { return }
 
             var lines = ["Grade Summary"]
             var totalEarned = 0.0, totalMax = 0.0
@@ -256,16 +289,22 @@ struct PDFViewerView: NSViewRepresentable {
             lines.append("─────────────")
             let pct = totalMax > 0 ? String(format: " (%.0f%%)", totalEarned / totalMax * 100) : ""
             lines.append("Total: \(fmtPts(totalEarned))/\(fmtPts(totalMax))\(pct)")
+            let newText = lines.joined(separator: "\n")
+
+            let summaryTag = "grader.summary"
+
+            // Update in-place to preserve position; only create at default location if absent
+            if let existing = page1.annotations.first(where: { $0.userName == summaryTag }) {
+                existing.contents = newText
+                return
+            }
 
             let lineCount = CGFloat(lines.count)
-            let fSize: CGFloat = 10
-            let h = lineCount * fSize * 1.5 + 8
+            let h = lineCount * 10 * 1.5 + 8
             let w: CGFloat = 160
             let pageH = page1.bounds(for: .mediaBox).height
             let bounds = CGRect(x: 10, y: pageH - h - 10, width: w, height: h)
-
-            let ann = makeGradeAnnotation(text: lines.joined(separator: "\n"), bounds: bounds, tag: summaryTag)
-            page1.addAnnotation(ann)
+            page1.addAnnotation(makeGradeAnnotation(text: newText, bounds: bounds, tag: summaryTag))
         }
 
         private func makeGradeAnnotation(text: String, bounds: CGRect, tag: String) -> PDFAnnotation {
@@ -273,11 +312,12 @@ struct PDFViewerView: NSViewRepresentable {
             ann.contents = text
             ann.font = NSFont.systemFont(ofSize: 10)
             ann.fontColor = NSColor(red: 0, green: 0.40, blue: 0.12, alpha: 1)  // dark green
-            ann.color = NSColor.white
+            // #FFFBB3 light yellow
+            ann.color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 1.0)
             ann.userName = tag
             ann.isReadOnly = true
             let border = PDFBorder()
-            border.lineWidth = 0.75
+            border.lineWidth = 0
             ann.border = border
             return ann
         }
@@ -287,9 +327,15 @@ struct PDFViewerView: NSViewRepresentable {
         }
 
         private func savePDF() {
-            guard let url = currentURL,
-                  let data = pdfView?.document?.dataRepresentation() else { return }
-            try? data.write(to: url, options: .atomic)
+            guard let url = currentURL, let doc = pdfView?.document else { return }
+            // Temporarily restore the selected annotation's real color before serializing
+            // so the blue selection tint is never baked into the saved PDF
+            let sel = pdfView?.selectedAnnotation
+            let orig = pdfView?.selectedOriginalColor
+            if let sel, let orig { sel.color = orig }
+            let data = doc.dataRepresentation()
+            if let sel { sel.color = NSColor.systemBlue.withAlphaComponent(0.25) }
+            if let data { try? data.write(to: url, options: .atomic) }
         }
     }
 }
@@ -312,18 +358,30 @@ final class AnnotatingPDFView: PDFView {
     var currentTool: AnnotationTool = .pointer
     weak var annotationDelegate: AnnotationDelegate?
 
-    // Tracks the "selected" annotation in pointer mode; stored color for visual highlight
-    private var selectedAnnotation: PDFAnnotation?
-    private var selectedOriginalColor: NSColor?
+    // Selection highlight — internal so savePDF can temporarily restore real color before serializing
+    var selectedAnnotation: PDFAnnotation?
+    var selectedOriginalColor: NSColor?
+
+    // Drag state for pointer mode
+    private var draggingAnnotation: PDFAnnotation?
+    private var dragStartPagePoint: CGPoint?
+    private var dragOriginalOrigin: CGPoint?
 
     override func mouseDown(with event: NSEvent) {
         let loc = pageLocation(for: event)
 
         switch currentTool {
         case .pointer:
-            let tapped = loc.flatMap { $0.page.annotation(at: $0.point) }
-            selectAnnotation(tapped)
-            super.mouseDown(with: event)
+            let hit = loc.flatMap { $0.page.annotation(at: $0.point) }
+            selectAnnotation(hit)
+            if let hit, let loc {
+                // Begin drag
+                draggingAnnotation = hit
+                dragStartPagePoint = loc.point
+                dragOriginalOrigin = hit.bounds.origin
+            } else {
+                super.mouseDown(with: event)
+            }
 
         case .delete:
             if let loc, let hit = loc.page.annotation(at: loc.point) {
@@ -380,7 +438,45 @@ final class AnnotatingPDFView: PDFView {
         }
     }
 
+    override func mouseDragged(with event: NSEvent) {
+        guard let ann = draggingAnnotation,
+              let page = ann.page,
+              let startPt = dragStartPagePoint,
+              let origOrigin = dragOriginalOrigin else {
+            super.mouseDragged(with: event)
+            return
+        }
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        let pagePoint = convert(viewPoint, to: page)
+        let dx = pagePoint.x - startPt.x
+        let dy = pagePoint.y - startPt.y
+        ann.bounds = CGRect(
+            origin: CGPoint(x: origOrigin.x + dx, y: origOrigin.y + dy),
+            size: ann.bounds.size
+        )
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if draggingAnnotation != nil {
+            draggingAnnotation = nil
+            dragStartPagePoint = nil
+            dragOriginalOrigin = nil
+            annotationDelegate?.pdfViewDidModify(self)  // saves PDF
+        } else {
+            super.mouseUp(with: event)
+        }
+    }
+
     override func keyDown(with event: NSEvent) {
+        // Cmd+Up/Down navigates students while keeping the targeted rubric item
+        if event.modifierFlags.contains(.command) {
+            switch event.keyCode {
+            case 126: NotificationCenter.default.post(name: .navigateStudent, object: -1); return
+            case 125: NotificationCenter.default.post(name: .navigateStudent, object:  1); return
+            default: break
+            }
+        }
+
         let ch = event.charactersIgnoringModifiers?.lowercased()
 
         // Keys only fire when PDF view has focus — won't interfere with sidebar list

@@ -3,10 +3,10 @@ import SwiftData
 import AppKit
 
 struct ImporterView: View {
-    @Bindable var assignment: Assignment
+    let assignment: Assignment
     @Binding var isPresented: Bool
     var roster: [RosterEntry] = []
-    let courseManager: CourseManager
+    let bundleURL: URL
 
     @Environment(\.modelContext) private var context
 
@@ -130,16 +130,13 @@ struct ImporterView: View {
     // MARK: - Import
 
     private func performImport() {
-        guard let pdfDir = courseManager.pdfDirectory(for: assignment) else {
-            errorMessage = "No course bundle open"
-            return
-        }
-        isScaling = true
-        let files = pendingFiles
-        let rubricIDs = assignment.rubricItems.map(\.id)
         let assignmentName = assignment.name
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
+        let pdfDir = bundleURL.appendingPathComponent("PDFs/\(assignmentName)")
+        isScaling = true
+        let files = pendingFiles
+        let rubricIDs = assignment.rubricItems.map(\.id)
 
         DispatchQueue.global(qos: .userInitiated).async {
             try? FileManager.default.createDirectory(at: pdfDir, withIntermediateDirectories: true)
