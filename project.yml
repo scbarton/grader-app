@@ -1,6 +1,6 @@
 name: GraderApp
 options:
-  bundleIdPrefix: com.scott
+  bundleIdPrefix: org.powrbox
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
@@ -20,7 +20,7 @@ targets:
       - GraderApp/Resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.scott.GraderApp
+        PRODUCT_BUNDLE_IDENTIFIER: org.powrbox.GraderApp
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         INFOPLIST_FILE: GraderApp/Resources/Info.plist

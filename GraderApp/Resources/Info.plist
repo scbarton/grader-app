@@ -7,7 +7,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>Grader</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.scott.GraderApp</string>
+	<string>org.powrbox.GraderApp</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>CFBundleShortVersionString</key>
@@ -18,5 +18,44 @@
 	<false/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+
+	<!-- Course bundle document type -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Grader Course</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.powrbox.gradercourse</string>
+			</array>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+		</dict>
+	</array>
+
+	<!-- Register the UTType so Finder treats it as a bundle (single item) -->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>org.powrbox.gradercourse</string>
+			<key>UTTypeDescription</key>
+			<string>Grader Course</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>com.apple.package</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>gradercourse</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -3,13 +3,38 @@ import SwiftData
 
 @main
 struct GraderApp: App {
+    @State private var courseManager = CourseManager()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .frame(minWidth: 1100, minHeight: 700)
+            Group {
+                if courseManager.isOpen,
+                   let container = courseManager.modelContainer,
+                   let bundleURL = courseManager.bundleURL {
+                    ContentView(bundleURL: bundleURL, courseManager: courseManager)
+                        .modelContainer(container)
+                } else {
+                    CoursePicker(courseManager: courseManager)
+                }
+            }
+            .frame(minWidth: 900, minHeight: 600)
+            .onOpenURL { url in
+                guard url.pathExtension == "gradercourse" else { return }
+                do { try courseManager.open(url: url) }
+                catch { NSAlert(error: error).runModal() }
+            }
         }
-        .modelContainer(for: [Assignment.self, RosterEntry.self])
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Course…") { courseManager.newCourse() }
+                    .keyboardShortcut("n", modifiers: .command)
+                Button("Open Course…") { courseManager.openExisting() }
+                    .keyboardShortcut("o", modifiers: .command)
+                if courseManager.isOpen {
+                    Divider()
+                    Button("Close Course") { courseManager.closeCourse() }
+                }
+            }
             CommandGroup(after: .newItem) {
                 Divider()
                 Button("Export Scores as CSV…") {

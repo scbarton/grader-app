@@ -6,6 +6,7 @@ struct ImporterView: View {
     @Bindable var assignment: Assignment
     @Binding var isPresented: Bool
     var roster: [RosterEntry] = []
+    let courseManager: CourseManager
 
     @Environment(\.modelContext) private var context
 
@@ -58,11 +59,6 @@ struct ImporterView: View {
                 if !pendingFiles.isEmpty {
                     Button("Add More…") { browse() }
                     Spacer()
-                    if roster.isEmpty {
-                        Text("Tip: add a class roster to auto-match names")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                     Button("Cancel") { isPresented = false }
                     Button("Import \(pendingFiles.count) Student\(pendingFiles.count == 1 ? "" : "s")") {
                         performImport()
@@ -79,15 +75,16 @@ struct ImporterView: View {
             if isScaling {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Scaling pages to letter size…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Text("Copying and scaling pages to letter size…")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.bottom, 8)
             }
         }
         .frame(width: 560, height: 440)
     }
+
+    // MARK: - Browse / Drop
 
     private func browse() {
         let panel = NSOpenPanel()
@@ -130,26 +127,47 @@ struct ImporterView: View {
         }
     }
 
+    // MARK: - Import
+
     private func performImport() {
+        guard let pdfDir = courseManager.pdfDirectory(for: assignment) else {
+            errorMessage = "No course bundle open"
+            return
+        }
         isScaling = true
         let files = pendingFiles
-        // Capture UUIDs on the main thread — don't pass SwiftData objects across threads
         let rubricIDs = assignment.rubricItems.map(\.id)
+        let assignmentName = assignment.name
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
 
         DispatchQueue.global(qos: .userInitiated).async {
+            try? FileManager.default.createDirectory(at: pdfDir, withIntermediateDirectories: true)
+
+            var results: [(name: String, email: String, fileName: String, relativePath: String)] = []
+
             for file in files {
-                PDFScaler.scaleToLetterIfNeeded(url: file.url)
+                let dest = pdfDir.appendingPathComponent(file.url.lastPathComponent)
+                // Copy source PDF into the bundle
+                do {
+                    if FileManager.default.fileExists(atPath: dest.path) {
+                        try FileManager.default.removeItem(at: dest)
+                    }
+                    try FileManager.default.copyItem(at: file.url, to: dest)
+                } catch {
+                    continue
+                }
+                // Scale to letter size in the bundle
+                PDFScaler.scaleToLetterIfNeeded(url: dest)
+
+                let relative = "PDFs/\(assignmentName)/\(file.url.lastPathComponent)"
+                results.append((file.name, file.email, file.url.lastPathComponent, relative))
             }
 
             DispatchQueue.main.async {
-                for file in files {
-                    guard let bookmark = BookmarkHelper.bookmark(for: file.url) else {
-                        errorMessage = "Could not bookmark \(file.url.lastPathComponent) — check file permissions"
-                        isScaling = false
-                        return
-                    }
-                    let student = Student(name: file.name, email: file.email, fileName: file.url.lastPathComponent)
-                    student.pdfBookmark = bookmark
+                for result in results {
+                    let student = Student(name: result.name, email: result.email, fileName: result.fileName)
+                    student.pdfRelativePath = result.relativePath
                     for id in rubricIDs {
                         student.scores.append(Score(rubricItemID: id))
                     }
@@ -173,7 +191,7 @@ struct ImporterView: View {
     private func bestRosterMatch(for name: String) -> RosterEntry? {
         guard !roster.isEmpty else { return nil }
         let tokens = name.lowercased().components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-        var best: (RosterEntry, Int)? = nil
+        var best: (RosterEntry, Int)?
         for entry in roster {
             let entryTokens = "\(entry.firstName) \(entry.lastName)".lowercased()
                 .components(separatedBy: .whitespaces)
@@ -184,7 +202,7 @@ struct ImporterView: View {
     }
 }
 
-// MARK: - Row view
+// MARK: - Row
 
 struct PendingFileRow: View {
     @Binding var file: PendingFile
@@ -195,20 +213,15 @@ struct PendingFileRow: View {
         HStack(spacing: 10) {
             Image(systemName: "doc.fill").foregroundStyle(.red)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(file.url.lastPathComponent)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 160, alignment: .leading)
+            Text(file.url.lastPathComponent)
+                .font(.caption).foregroundStyle(.secondary)
+                .frame(width: 160, alignment: .leading)
 
             TextField("Name", text: $file.name)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 140)
+                .textFieldStyle(.roundedBorder).frame(width: 140)
 
             TextField("Email", text: $file.email)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 160)
+                .textFieldStyle(.roundedBorder).frame(width: 160)
 
             if !roster.isEmpty {
                 Picker("", selection: $file.rosterEntry) {
@@ -219,10 +232,7 @@ struct PendingFileRow: View {
                 }
                 .frame(width: 130)
                 .onChange(of: file.rosterEntry) { _, entry in
-                    if let entry {
-                        file.name = entry.fullName
-                        file.email = entry.email
-                    }
+                    if let entry { file.name = entry.fullName; file.email = entry.email }
                 }
             }
 
@@ -231,8 +241,7 @@ struct PendingFileRow: View {
             }
             .buttonStyle(.borderless)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12).padding(.vertical, 6)
     }
 }
 

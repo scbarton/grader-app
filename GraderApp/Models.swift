@@ -1,75 +1,66 @@
 import SwiftData
 import Foundation
+import UniformTypeIdentifiers
 
-@Model
-final class Assignment {
+// MARK: - Course bundle UTType
+
+extension UTType {
+    static let gradercourse = UTType(exportedAs: "org.powrbox.gradercourse")
+}
+
+// MARK: - SwiftData models
+
+@Model final class Assignment {
     var id: UUID = UUID()
     var name: String = ""
-    var folderBookmark: Data?
     var createdAt: Date = Date()
 
-    @Relationship(deleteRule: .cascade)
-    var rubricItems: [RubricItem] = []
-
-    @Relationship(deleteRule: .cascade)
-    var students: [Student] = []
+    @Relationship(deleteRule: .cascade) var rubricItems: [RubricItem] = []
+    @Relationship(deleteRule: .cascade) var students: [Student] = []
 
     var maxPoints: Double { rubricItems.reduce(0) { $0 + $1.maxPoints } }
 
-    init(name: String) {
-        self.name = name
-    }
+    init(name: String) { self.name = name }
 }
 
-@Model
-final class RubricItem {
+@Model final class RubricItem {
     var id: UUID = UUID()
     var name: String = ""
     var maxPoints: Double = 10
     var order: Int = 0
 
     init(name: String, maxPoints: Double, order: Int) {
-        self.name = name
-        self.maxPoints = maxPoints
-        self.order = order
+        self.name = name; self.maxPoints = maxPoints; self.order = order
     }
 }
 
-@Model
-final class Student {
+@Model final class Student {
     var id: UUID = UUID()
     var name: String = ""
     var email: String = ""
     var fileName: String = ""
-    var pdfBookmark: Data?
+    /// Path relative to the course bundle root, e.g. "PDFs/HW1/smith_john.pdf"
+    var pdfRelativePath: String = ""
 
-    @Relationship(deleteRule: .cascade)
-    var scores: [Score] = []
+    @Relationship(deleteRule: .cascade) var scores: [Score] = []
 
     var totalScore: Double { scores.compactMap(\.points).reduce(0, +) }
 
     init(name: String, email: String = "", fileName: String) {
-        self.name = name
-        self.email = email
-        self.fileName = fileName
+        self.name = name; self.email = email; self.fileName = fileName
     }
 }
 
-@Model
-final class Score {
+@Model final class Score {
     var id: UUID = UUID()
     var rubricItemID: UUID = UUID()
     var points: Double?
     var comment: String = ""
 
-    init(rubricItemID: UUID) {
-        self.rubricItemID = rubricItemID
-    }
+    init(rubricItemID: UUID) { self.rubricItemID = rubricItemID }
 }
 
-// Class roster — shared across all assignments
-@Model
-final class RosterEntry {
+@Model final class RosterEntry {
     var id: UUID = UUID()
     var lastName: String = ""
     var firstName: String = ""
@@ -79,8 +70,6 @@ final class RosterEntry {
     var sortKey: String { "\(lastName), \(firstName)" }
 
     init(firstName: String, lastName: String, email: String) {
-        self.firstName = firstName
-        self.lastName = lastName
-        self.email = email
+        self.firstName = firstName; self.lastName = lastName; self.email = email
     }
 }

@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    let bundleURL: URL
+    let courseManager: CourseManager
+
     @Environment(\.modelContext) private var context
     @Query(sort: \Assignment.createdAt) private var assignments: [Assignment]
 
@@ -12,13 +15,15 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             AssignmentSidebarView(
+                bundleURL: bundleURL,
+                courseManager: courseManager,
                 selectedAssignment: $selectedAssignment,
                 selectedStudent: $selectedStudent
             )
         } detail: {
             if let student = selectedStudent, let assignment = selectedAssignment {
                 HSplitView {
-                    PDFViewerView(student: student, tool: $annotationTool)
+                    PDFViewerView(student: student, assignment: assignment, bundleURL: bundleURL, tool: $annotationTool)
                         .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
                     ScorePanelView(student: student, assignment: assignment)
                         .frame(minWidth: 240, maxWidth: 340, maxHeight: .infinity)
@@ -37,7 +42,15 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .exportCSV)) { _ in
             if let assignment = selectedAssignment {
-                CSVExporter.export(assignment: assignment)
+                PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button("Close Course", systemImage: "xmark.circle") {
+                    courseManager.closeCourse()
+                }
+                .help("Close this course and return to the picker")
             }
         }
     }

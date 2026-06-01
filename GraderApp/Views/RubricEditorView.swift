@@ -5,7 +5,7 @@ struct RubricEditorView: View {
     @Binding var isPresented: Bool
 
     @State private var newName = ""
-    @State private var newMax = ""
+    @State private var newMax = "10"
 
     private var sorted: [RubricItem] {
         assignment.rubricItems.sorted(by: { $0.order < $1.order })

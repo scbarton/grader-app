@@ -6,6 +6,8 @@ struct AssignmentSidebarView: View {
     @Query(sort: \Assignment.createdAt) private var assignments: [Assignment]
     @Query(sort: \RosterEntry.lastName) private var roster: [RosterEntry]
 
+    let bundleURL: URL
+    let courseManager: CourseManager
     @Binding var selectedAssignment: Assignment?
     @Binding var selectedStudent: Student?
 
@@ -27,7 +29,7 @@ struct AssignmentSidebarView: View {
                     onRemoveStudent: { removeStudent($0, from: assignment) },
                     onEditRubric:   { selectedAssignment = assignment; showingRubricEditor = true },
                     onImport:       { selectedAssignment = assignment; showingImporter = true },
-                    onExport:       { PDFExporter.showExportPanel(for: assignment) },
+                    onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
                     onDelete:       { deleteAssignment(assignment) }
                 )
             }
@@ -71,7 +73,12 @@ struct AssignmentSidebarView: View {
         }
         .sheet(isPresented: $showingImporter) {
             if let assignment = selectedAssignment {
-                ImporterView(assignment: assignment, isPresented: $showingImporter, roster: roster)
+                ImporterView(
+                    assignment: assignment,
+                    isPresented: $showingImporter,
+                    roster: roster,
+                    courseManager: courseManager
+                )
             }
         }
         .sheet(isPresented: $showingRoster) {
@@ -94,7 +101,6 @@ struct AssignmentSidebarView: View {
     }
 }
 
-// Separate struct so the compiler doesn't time out on the nested Section+ForEach
 private struct AssignmentSection: View {
     let assignment: Assignment
     @Binding var isExpanded: Bool
@@ -121,9 +127,7 @@ private struct AssignmentSection: View {
             }
         } label: {
             HStack {
-                Text(assignment.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                Text(assignment.name).font(.headline).foregroundStyle(.primary)
                 Spacer()
                 Menu {
                     Button("Edit Rubric…", action: onEditRubric)
@@ -136,7 +140,6 @@ private struct AssignmentSection: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                // Prevent menu tap from toggling disclosure
                 .onTapGesture {}
             }
         }
@@ -158,8 +161,7 @@ struct StudentRow: View {
                 if totalItems > 0 {
                     let maxPts = rubricItems.reduce(0.0) { $0 + $1.maxPoints }
                     Text("\(student.totalScore, specifier: "%.1f") / \(maxPts, specifier: "%.0f") pts")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
@@ -182,8 +184,7 @@ struct NewAssignmentSheet: View {
         VStack(spacing: 20) {
             Text("New Assignment").font(.headline)
             TextField("Assignment name (e.g. HW1, Midterm)", text: $name)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 300)
+                .textFieldStyle(.roundedBorder).frame(width: 300)
             HStack {
                 Button("Cancel") { isPresented = false }
                 Button("Create") {
@@ -195,7 +196,6 @@ struct NewAssignmentSheet: View {
                 .disabled(name.isEmpty)
             }
         }
-        .padding(24)
-        .frame(width: 360)
+        .padding(24).frame(width: 360)
     }
 }

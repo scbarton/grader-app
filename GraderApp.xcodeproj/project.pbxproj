@@ -3,19 +3,20 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		0592B7D70983F3197546F666 /* AssignmentSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */; };
 		0E51F28CFC775B3D65F192EC /* ScorePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D5F4E75823E072D0676326 /* ScorePanelView.swift */; };
-		40CB3918CFA090945C7472EA /* BookmarkHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03206A13EBB7A8E8A1E5135 /* BookmarkHelper.swift */; };
+		3B2C5B1DA67C285D11F9E405 /* CoursePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130AC4C1A282F5AF82AB5FF0 /* CoursePicker.swift */; };
 		57DB48469F9F2CD9F50EC60B /* ImporterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4055BA06695FE4C851DD5349 /* ImporterView.swift */; };
 		84E17746A764B1A3357C9CDB /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37A31B07B8BB7B750A371BA3 /* Models.swift */; };
 		86AC3C1C9686D16B40B708BC /* AnnotationToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718198BEA16FAE38B63AF8CE /* AnnotationToolbar.swift */; };
 		8F97CD5529AFADCE48930C71 /* PDFScaler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B929FCD8DF21B160D8694496 /* PDFScaler.swift */; };
 		93A44FCCB28930712E5989FE /* GraderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F8A15347DB9A96F63642B5 /* GraderApp.swift */; };
 		CB412AE0C660E0509EB7B5A3 /* RubricEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16F440F44CFFB58CDE84D8C3 /* RubricEditorView.swift */; };
+		CB9FA07FD95C9572CC940CED /* CourseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 578DAE91F702021B35E61D39 /* CourseManager.swift */; };
 		D1C5398C9D4E5F4D64F2C66D /* RosterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */; };
 		D483966583C864E9F985EB37 /* PDFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66E35F038E43CA7973462169 /* PDFExporter.swift */; };
 		DEF406FD7E27D6BF05D0A18A /* PDFViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA76B5EE9992BF5FCFC9939 /* PDFViewerView.swift */; };
@@ -27,10 +28,12 @@
 /* Begin PBXFileReference section */
 		0FA76B5EE9992BF5FCFC9939 /* PDFViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFViewerView.swift; sourceTree = "<group>"; };
 		12D5F4E75823E072D0676326 /* ScorePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScorePanelView.swift; sourceTree = "<group>"; };
+		130AC4C1A282F5AF82AB5FF0 /* CoursePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoursePicker.swift; sourceTree = "<group>"; };
 		16F440F44CFFB58CDE84D8C3 /* RubricEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RubricEditorView.swift; sourceTree = "<group>"; };
 		37A31B07B8BB7B750A371BA3 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		4055BA06695FE4C851DD5349 /* ImporterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImporterView.swift; sourceTree = "<group>"; };
 		455A879C62655FDBAE68387E /* GraderApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GraderApp.entitlements; sourceTree = "<group>"; };
+		578DAE91F702021B35E61D39 /* CourseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourseManager.swift; sourceTree = "<group>"; };
 		646A944E9F7BE0A9A59FFA37 /* PDFKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = PDFKit.framework; sourceTree = "<group>"; };
 		66E35F038E43CA7973462169 /* PDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFExporter.swift; sourceTree = "<group>"; };
 		718198BEA16FAE38B63AF8CE /* AnnotationToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationToolbar.swift; sourceTree = "<group>"; };
@@ -41,7 +44,6 @@
 		A8F8A15347DB9A96F63642B5 /* GraderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraderApp.swift; sourceTree = "<group>"; };
 		B0718D65A2368FFA48909360 /* GraderApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GraderApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B929FCD8DF21B160D8694496 /* PDFScaler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFScaler.swift; sourceTree = "<group>"; };
-		E03206A13EBB7A8E8A1E5135 /* BookmarkHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkHelper.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,6 +63,7 @@
 			children = (
 				718198BEA16FAE38B63AF8CE /* AnnotationToolbar.swift */,
 				9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */,
+				130AC4C1A282F5AF82AB5FF0 /* CoursePicker.swift */,
 				4055BA06695FE4C851DD5349 /* ImporterView.swift */,
 				0FA76B5EE9992BF5FCFC9939 /* PDFViewerView.swift */,
 				A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */,
@@ -94,6 +97,7 @@
 				437ECB64F0405FE3615BA516 /* Resources */,
 				0BDB387731DA15CF71A8004B /* Views */,
 				89AB81F683A0C3BA98266F55 /* ContentView.swift */,
+				578DAE91F702021B35E61D39 /* CourseManager.swift */,
 				A8F8A15347DB9A96F63642B5 /* GraderApp.swift */,
 				37A31B07B8BB7B750A371BA3 /* Models.swift */,
 			);
@@ -111,7 +115,6 @@
 		A251DCC9BE02FA48F9A7A19E /* Helpers */ = {
 			isa = PBXGroup;
 			children = (
-				E03206A13EBB7A8E8A1E5135 /* BookmarkHelper.swift */,
 				95580A073C3C1A209DA1EEB1 /* CSVExporter.swift */,
 				66E35F038E43CA7973462169 /* PDFExporter.swift */,
 				B929FCD8DF21B160D8694496 /* PDFScaler.swift */,
@@ -172,7 +175,6 @@
 			);
 			mainGroup = 3051C859F0D3F3B73626D024;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -188,9 +190,10 @@
 			files = (
 				86AC3C1C9686D16B40B708BC /* AnnotationToolbar.swift in Sources */,
 				0592B7D70983F3197546F666 /* AssignmentSidebarView.swift in Sources */,
-				40CB3918CFA090945C7472EA /* BookmarkHelper.swift in Sources */,
 				E9C83BF8D4775F2D72D035D4 /* CSVExporter.swift in Sources */,
 				F39EE9813B6609171E9AF48B /* ContentView.swift in Sources */,
+				CB9FA07FD95C9572CC940CED /* CourseManager.swift in Sources */,
+				3B2C5B1DA67C285D11F9E405 /* CoursePicker.swift in Sources */,
 				93A44FCCB28930712E5989FE /* GraderApp.swift in Sources */,
 				57DB48469F9F2CD9F50EC60B /* ImporterView.swift in Sources */,
 				84E17746A764B1A3357C9CDB /* Models.swift in Sources */,
@@ -224,7 +227,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.scott.GraderApp;
+				PRODUCT_BUNDLE_IDENTIFIER = org.powrbox.GraderApp;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.9;
@@ -305,7 +308,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.scott.GraderApp;
+				PRODUCT_BUNDLE_IDENTIFIER = org.powrbox.GraderApp;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.9;

@@ -18,6 +18,12 @@ struct AnnotationToolbar: ToolbarContent {
             }
             .help("Delete annotation · click any annotation to remove it · shortcut: D")
 
+            ToolButton(label: "Grade", icon: "seal.fill", active: tool == .grade) {
+                tool = .grade
+            }
+            .foregroundStyle(tool == .grade ? Color(nsColor: .white) : Color(red: 0, green: 0.4, blue: 0.12))
+            .help("Place grade stamp · click where problem starts, choose problem · shortcut: G")
+
             ToolButton(label: "Comment", icon: "text.bubble", active: tool == .text) {
                 tool = .text
             }

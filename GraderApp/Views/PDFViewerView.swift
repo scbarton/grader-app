@@ -9,6 +9,7 @@ enum AnnotationTool: Equatable, Hashable {
     case text
     case highlight
     case delete
+    case grade
     case stamp(StampType)
 
     enum StampType: CaseIterable, Hashable {
@@ -44,6 +45,8 @@ enum AnnotationTool: Equatable, Hashable {
 
 struct PDFViewerView: NSViewRepresentable {
     let student: Student
+    let assignment: Assignment
+    let bundleURL: URL
     @Binding var tool: AnnotationTool
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -68,24 +71,24 @@ struct PDFViewerView: NSViewRepresentable {
 
     func updateNSView(_ pdfView: AnnotatingPDFView, context: Context) {
         if pdfView.currentTool != tool {
-            pdfView.selectAnnotation(nil)  // clear selection when tool changes
+            pdfView.selectAnnotation(nil)
         }
         pdfView.currentTool = tool
         context.coordinator.toolBinding = _tool
+        context.coordinator.student = student
+        context.coordinator.rubricItems = assignment.rubricItems.sorted { $0.order < $1.order }
 
-        if let bookmark = student.pdfBookmark {
-            let url = BookmarkHelper.resolve(bookmark)
-            if url != context.coordinator.loadedURL {
-                context.coordinator.loadedURL = url
-                if let url {
-                    pdfView.document = PDFDocument(url: url)
-                    context.coordinator.currentURL = url
-                    // Scale to fit on first load, then let the user zoom freely
-                    pdfView.autoScales = true
-                    DispatchQueue.main.async {
-                        pdfView.autoScales = false
-                    }
-                }
+        let url: URL? = student.pdfRelativePath.isEmpty
+            ? nil
+            : bundleURL.appendingPathComponent(student.pdfRelativePath)
+
+        if url != context.coordinator.loadedURL {
+            context.coordinator.loadedURL = url
+            if let url {
+                pdfView.document = PDFDocument(url: url)
+                context.coordinator.currentURL = url
+                pdfView.autoScales = true
+                DispatchQueue.main.async { pdfView.autoScales = false }
             }
         }
     }
@@ -97,6 +100,8 @@ struct PDFViewerView: NSViewRepresentable {
         var loadedURL: URL?
         var currentURL: URL?
         var toolBinding: Binding<AnnotationTool>?
+        var student: Student?
+        var rubricItems: [RubricItem] = []
 
         func pdfView(_ view: AnnotatingPDFView, didClickAt point: CGPoint, on page: PDFPage, tool: AnnotationTool) {
             switch tool {
@@ -195,11 +200,131 @@ struct PDFViewerView: NSViewRepresentable {
             addAnnotationWithUndo(annotation, to: page)
         }
 
+        // MARK: - Grade stamping
+
+        func pdfViewShowGradePicker(at point: CGPoint, on page: PDFPage, event: NSEvent) {
+            let sorted = rubricItems
+            let menu = NSMenu()
+
+            if sorted.isEmpty {
+                let item = NSMenuItem(title: "Add rubric items first", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            } else {
+                for rItem in sorted {
+                    let score = student?.scores.first { $0.rubricItemID == rItem.id }
+                    let scoreText = score?.points.map { "\(fmtPts($0))/\(fmtPts(rItem.maxPoints))" }
+                        ?? "—/\(fmtPts(rItem.maxPoints))"
+                    let mi = NSMenuItem(
+                        title: "\(rItem.name): \(scoreText)",
+                        action: #selector(gradeItemSelected(_:)),
+                        keyEquivalent: ""
+                    )
+                    mi.target = self
+                    mi.representedObject = GradePickerData(rubricItem: rItem, pagePoint: point, page: page)
+                    menu.addItem(mi)
+                }
+            }
+            guard let view = pdfView else { return }
+            NSMenu.popUpContextMenu(menu, with: event, for: view)
+        }
+
+        @objc private func gradeItemSelected(_ sender: NSMenuItem) {
+            guard let data = sender.representedObject as? GradePickerData else { return }
+            placeGradeStamp(for: data.rubricItem, at: data.pagePoint, on: data.page)
+        }
+
+        private func placeGradeStamp(for item: RubricItem, at point: CGPoint, on page: PDFPage) {
+            guard let doc = pdfView?.document else { return }
+
+            // Remove any existing stamp for this problem across all pages
+            let tag = "grader.grade.\(item.id.uuidString)"
+            for i in 0..<doc.pageCount {
+                guard let p = doc.page(at: i) else { continue }
+                p.annotations.filter { $0.userName == tag }.forEach { p.removeAnnotation($0) }
+            }
+
+            let score = student?.scores.first { $0.rubricItemID == item.id }
+            let earnedText = score?.points.map { fmtPts($0) } ?? "—"
+            let text = "\(item.name)\n\(earnedText) / \(fmtPts(item.maxPoints))"
+
+            let w: CGFloat = 120, h: CGFloat = 36
+            let bounds = CGRect(x: point.x, y: point.y - h / 2, width: w, height: h)
+            let ann = makeGradeAnnotation(text: text, bounds: bounds, tag: tag)
+            page.addAnnotation(ann)
+
+            updateSummary()
+            savePDF()
+        }
+
+        private func updateSummary() {
+            guard let doc = pdfView?.document,
+                  let page1 = doc.page(at: 0),
+                  let student = student else { return }
+
+            let summaryTag = "grader.summary"
+            page1.annotations.filter { $0.userName == summaryTag }.forEach { page1.removeAnnotation($0) }
+
+            guard !rubricItems.isEmpty else { return }
+
+            var lines = ["Grade Summary"]
+            var totalEarned = 0.0, totalMax = 0.0
+            for item in rubricItems {
+                let score = student.scores.first { $0.rubricItemID == item.id }
+                let earned = score?.points
+                totalEarned += earned ?? 0
+                totalMax += item.maxPoints
+                let earnedStr = earned.map { fmtPts($0) } ?? "—"
+                lines.append("\(item.name): \(earnedStr)/\(fmtPts(item.maxPoints))")
+            }
+            lines.append("─────────────")
+            let pct = totalMax > 0 ? String(format: " (%.0f%%)", totalEarned / totalMax * 100) : ""
+            lines.append("Total: \(fmtPts(totalEarned))/\(fmtPts(totalMax))\(pct)")
+
+            let lineCount = CGFloat(lines.count)
+            let fSize: CGFloat = 10
+            let h = lineCount * fSize * 1.5 + 8
+            let w: CGFloat = 160
+            let pageH = page1.bounds(for: .mediaBox).height
+            let bounds = CGRect(x: 10, y: pageH - h - 10, width: w, height: h)
+
+            let ann = makeGradeAnnotation(text: lines.joined(separator: "\n"), bounds: bounds, tag: summaryTag)
+            page1.addAnnotation(ann)
+        }
+
+        private func makeGradeAnnotation(text: String, bounds: CGRect, tag: String) -> PDFAnnotation {
+            let ann = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
+            ann.contents = text
+            ann.font = NSFont.systemFont(ofSize: 10)
+            ann.fontColor = NSColor(red: 0, green: 0.40, blue: 0.12, alpha: 1)  // dark green
+            ann.color = NSColor.white
+            ann.userName = tag
+            ann.isReadOnly = true
+            let border = PDFBorder()
+            border.lineWidth = 0.75
+            ann.border = border
+            return ann
+        }
+
+        private func fmtPts(_ val: Double) -> String {
+            val.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(val)) : String(format: "%.1f", val)
+        }
+
         private func savePDF() {
             guard let url = currentURL,
                   let data = pdfView?.document?.dataRepresentation() else { return }
             try? data.write(to: url, options: .atomic)
         }
+    }
+}
+
+// Helper class to carry grade picker selection data through NSMenu
+private final class GradePickerData: NSObject {
+    let rubricItem: RubricItem
+    let pagePoint: CGPoint
+    let page: PDFPage
+    init(rubricItem: RubricItem, pagePoint: CGPoint, page: PDFPage) {
+        self.rubricItem = rubricItem; self.pagePoint = pagePoint; self.page = page
     }
 }
 
@@ -210,6 +335,7 @@ protocol AnnotationDelegate: AnyObject {
     func pdfViewDidModify(_ view: AnnotatingPDFView)
     func pdfViewDidRequestTool(_ tool: AnnotationTool)
     func pdfViewApplyHighlight(_ view: AnnotatingPDFView)
+    func pdfViewShowGradePicker(at point: CGPoint, on page: PDFPage, event: NSEvent)
     func removeAnnotationWithUndo(_ annotation: PDFAnnotation)
 }
 
@@ -236,6 +362,11 @@ final class AnnotatingPDFView: PDFView {
             if let loc, let hit = loc.page.annotation(at: loc.point) {
                 selectAnnotation(nil)
                 annotationDelegate?.removeAnnotationWithUndo(hit)
+            }
+
+        case .grade:
+            if let loc {
+                annotationDelegate?.pdfViewShowGradePicker(at: loc.point, on: loc.page, event: event)
             }
 
         case .highlight:
@@ -290,6 +421,7 @@ final class AnnotatingPDFView: PDFView {
         case "c": annotationDelegate?.pdfViewDidRequestTool(.text);              return
         case "h": annotationDelegate?.pdfViewApplyHighlight(self);               return
         case "d": annotationDelegate?.pdfViewDidRequestTool(.delete);            return
+        case "g": annotationDelegate?.pdfViewDidRequestTool(.grade);             return
         case "v": annotationDelegate?.pdfViewDidRequestTool(.stamp(.correct));   return
         case "x": annotationDelegate?.pdfViewDidRequestTool(.stamp(.incorrect)); return
         case "k": annotationDelegate?.pdfViewDidRequestTool(.stamp(.partial));   return

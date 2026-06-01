@@ -4,7 +4,7 @@ import Foundation
 
 enum PDFExporter {
 
-    static func showExportPanel(for assignment: Assignment) {
+    static func showExportPanel(for assignment: Assignment, bundleURL: URL) {
         let panel = NSOpenPanel()
         panel.message = "Choose a destination folder for the graded PDFs"
         panel.prompt = "Export Here"
@@ -18,9 +18,8 @@ enum PDFExporter {
         var failed: [String] = []
 
         for student in assignment.students.sorted(by: { $0.name < $1.name }) {
-            guard let bookmark = student.pdfBookmark,
-                  let sourceURL = BookmarkHelper.resolve(bookmark),
-                  let document = PDFDocument(url: sourceURL) else {
+            guard !student.pdfRelativePath.isEmpty,
+                  let document = PDFDocument(url: bundleURL.appendingPathComponent(student.pdfRelativePath)) else {
                 failed.append(student.name)
                 continue
             }
