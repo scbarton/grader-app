@@ -42,6 +42,12 @@ struct GraderApp: App {
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
             }
+            CommandGroup(replacing: .sidebar) {
+                Button("Toggle Sidebar") {
+                    NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+                }
+                .keyboardShortcut("[", modifiers: .control)
+            }
         }
     }
 }
