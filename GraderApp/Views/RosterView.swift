@@ -129,26 +129,71 @@ struct RosterView: View {
     private func importCSV() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.commaSeparatedText, .plainText]
-        panel.message = "Select a CSV file with columns: First Name, Last Name, Email (header row optional)"
+        panel.message = "Select a CSV file — either a D2L grade export or a simple First Name, Last Name, Email CSV"
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
             let raw = try String(contentsOf: url, encoding: .utf8)
             let lines = raw.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            var added = 0
-            for line in lines {
-                let cols = parseCSVLine(line)
-                guard cols.count >= 3 else { continue }
-                let first = cols[0].trimmingCharacters(in: .whitespaces)
-                let last  = cols[1].trimmingCharacters(in: .whitespaces)
-                let mail  = cols[2].trimmingCharacters(in: .whitespaces)
-                // Skip header row
-                if first.lowercased() == "first" || first.lowercased() == "first name" { continue }
-                guard !first.isEmpty, !last.isEmpty else { continue }
-                context.insert(RosterEntry(firstName: first, lastName: last, email: mail))
-                added += 1
+            guard !lines.isEmpty else { csvError = "File is empty."; return }
+
+            let header = parseCSVLine(lines[0]).map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            let isD2L  = header.contains("orgdefinedid")
+
+            if isD2L {
+                guard let idIdx    = header.firstIndex(of: "orgdefinedid"),
+                      let userIdx  = header.firstIndex(of: "username"),
+                      let lastIdx  = header.firstIndex(of: "last name"),
+                      let firstIdx = header.firstIndex(of: "first name"),
+                      let emailIdx = header.firstIndex(of: "email") else {
+                    csvError = "D2L export missing expected columns."; return
+                }
+                var added = 0, updated = 0
+                for line in lines.dropFirst() {
+                    let cols = parseCSVLine(line)
+                    let maxIdx = max(idIdx, userIdx, lastIdx, firstIdx, emailIdx)
+                    guard cols.count > maxIdx else { continue }
+                    let rawId  = cols[idIdx].trimmingCharacters(in: .whitespaces)
+                    let rawU   = cols[userIdx].trimmingCharacters(in: .whitespaces)
+                    let last   = cols[lastIdx].trimmingCharacters(in: .whitespaces)
+                    let first  = cols[firstIdx].trimmingCharacters(in: .whitespaces)
+                    let email  = cols[emailIdx].trimmingCharacters(in: .whitespaces)
+                    guard !last.isEmpty, !first.isEmpty else { continue }
+                    let orgId  = rawId.hasPrefix("#") ? String(rawId.dropFirst()) : rawId
+                    let uname  = rawU.hasPrefix("#")  ? String(rawU.dropFirst())  : rawU
+                    if let existing = roster.first(where: { $0.email.lowercased() == email.lowercased() }) {
+                        existing.orgDefinedId = orgId
+                        existing.username     = uname
+                        updated += 1
+                    } else {
+                        let entry = RosterEntry(firstName: first, lastName: last, email: email)
+                        entry.orgDefinedId = orgId
+                        entry.username     = uname
+                        context.insert(entry)
+                        added += 1
+                    }
+                }
+                csvError = (added + updated) > 0 ? nil : "No valid rows found."
+                let alert = NSAlert()
+                alert.messageText = "Roster Import Complete"
+                alert.informativeText = "\(added) student\(added == 1 ? "" : "s") added, \(updated) updated with D2L IDs."
+                alert.alertStyle = .informational
+                alert.runModal()
+            } else {
+                var added = 0
+                for line in lines {
+                    let cols = parseCSVLine(line)
+                    guard cols.count >= 3 else { continue }
+                    let first = cols[0].trimmingCharacters(in: .whitespaces)
+                    let last  = cols[1].trimmingCharacters(in: .whitespaces)
+                    let mail  = cols[2].trimmingCharacters(in: .whitespaces)
+                    if first.lowercased() == "first" || first.lowercased() == "first name" { continue }
+                    guard !first.isEmpty, !last.isEmpty else { continue }
+                    context.insert(RosterEntry(firstName: first, lastName: last, email: mail))
+                    added += 1
+                }
+                csvError = added > 0 ? nil : "No valid rows found. Expected: First Name, Last Name, Email"
             }
-            csvError = added > 0 ? nil : "No valid rows found. Expected: First Name, Last Name, Email"
         } catch {
             csvError = "Could not read file: \(error.localizedDescription)"
         }
