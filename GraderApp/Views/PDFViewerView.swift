@@ -110,29 +110,34 @@ struct PDFViewerView: NSViewRepresentable {
             context.coordinator.scrollToGradeStamp(for: item)
         }
 
-        // Live-refresh grade annotations when scores change
-        let newSnapshot = Dictionary(uniqueKeysWithValues: student.scores.map { ($0.rubricItemID, $0.points) })
-        if newSnapshot != context.coordinator.scoreSnapshot {
-            context.coordinator.scoreSnapshot = newSnapshot
-            if context.coordinator.pdfView?.document != nil {
-                context.coordinator.refreshGradeAnnotations()
-            }
-        }
-
         let url: URL? = student.pdfRelativePath.isEmpty
             ? nil
             : bundleURL.appendingPathComponent(student.pdfRelativePath)
 
+        let newSnapshot = Dictionary(uniqueKeysWithValues: student.scores.map { ($0.rubricItemID, $0.points) })
+
         if url != context.coordinator.loadedURL {
+            // Student changed: save the current PDF before switching so any pending
+            // score updates are flushed to disk, then load the new PDF.
+            context.coordinator.savePDFIfNeeded()
+            context.coordinator.scoreSnapshot = newSnapshot
             context.coordinator.loadedURL = url
             if let url {
                 pdfView.document = PDFDocument(url: url)
                 context.coordinator.currentURL = url
                 pdfView.autoScales = true
-                DispatchQueue.main.async { pdfView.autoScales = false }
+                DispatchQueue.main.async {
+                    pdfView.autoScales = false
+                    context.coordinator.refreshGradeAnnotations()
+                }
             }
-            // Student changed — reclaim focus from sidebar so key shortcuts work immediately
             DispatchQueue.main.async { pdfView.window?.makeFirstResponder(pdfView) }
+        } else if newSnapshot != context.coordinator.scoreSnapshot {
+            // Same student, scores changed: update stamps in the current document.
+            context.coordinator.scoreSnapshot = newSnapshot
+            if context.coordinator.pdfView?.document != nil {
+                context.coordinator.refreshGradeAnnotations()
+            }
         }
     }
 
@@ -259,7 +264,7 @@ struct PDFViewerView: NSViewRepresentable {
                     }
                 }
             }
-            updateSummary()
+            if updateSummary() { didUpdate = true }
             if didUpdate { savePDF() }
         }
 
@@ -302,11 +307,12 @@ struct PDFViewerView: NSViewRepresentable {
             savePDF()
         }
 
-        private func updateSummary() {
+        @discardableResult
+        private func updateSummary() -> Bool {
             guard let doc = pdfView?.document,
                   let page1 = doc.page(at: 0),
                   let student = student,
-                  !rubricItems.isEmpty else { return }
+                  !rubricItems.isEmpty else { return false }
 
             var lines = ["Grade Summary"]
             var totalEarned = 0.0, totalMax = 0.0
@@ -325,10 +331,10 @@ struct PDFViewerView: NSViewRepresentable {
 
             let summaryTag = "grader.summary"
 
-            // Update in-place to preserve position; only create at default location if absent
             if let existing = page1.annotations.first(where: { $0.userName == summaryTag }) {
+                if existing.contents == newText { return false }
                 existing.contents = newText
-                return
+                return true
             }
 
             let lineCount = CGFloat(lines.count)
@@ -337,6 +343,7 @@ struct PDFViewerView: NSViewRepresentable {
             let pageRect = page1.bounds(for: .mediaBox)
             let bounds = CGRect(x: pageRect.width - w - 10, y: pageRect.height - h - 10, width: w, height: h)
             page1.addAnnotation(makeGradeAnnotation(text: newText, bounds: bounds, tag: summaryTag))
+            return true
         }
 
         private func makeGradeAnnotation(text: String, bounds: CGRect, tag: String) -> PDFAnnotation {
@@ -389,6 +396,10 @@ struct PDFViewerView: NSViewRepresentable {
                 score.points = min(max(0, value), item.maxPoints)
             }
             return true
+        }
+
+        func savePDFIfNeeded() {
+            savePDF()
         }
 
         private func savePDF() {
