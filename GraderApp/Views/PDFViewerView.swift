@@ -213,12 +213,18 @@ struct PDFViewerView: NSViewRepresentable {
         private func showTextAnnotation(page: PDFPage, at point: CGPoint) {
             pdfView?.showInlineComment(at: point, on: page) { [weak self] text in
                 guard let self else { return }
-                let lineCount = max(1, CGFloat(text.components(separatedBy: "\n").count))
-                let height = max(30, lineCount * 15 + 10)
-                let bounds = CGRect(x: point.x, y: point.y - height, width: 200, height: height)
+                let font = NSFont.systemFont(ofSize: 16)
+                let annotationWidth: CGFloat = 200
+                let measured = (text as NSString).boundingRect(
+                    with: CGSize(width: annotationWidth - 8, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: [.font: font]
+                )
+                let height = max(30, ceil(measured.height) + 12)
+                let bounds = CGRect(x: point.x, y: point.y - height, width: annotationWidth, height: height)
                 let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
                 annotation.contents = text
-                annotation.color = .clear
+                annotation.color = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.5)
                 annotation.fontColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
                 annotation.font = NSFont.systemFont(ofSize: 16)
                 self.addAnnotationWithUndo(annotation, to: page)
@@ -472,16 +478,16 @@ final class AnnotatingPDFView: PDFView {
     // Inline comment editor overlay
     private var inlineEditorContainer: NSView?
 
-    func showInlineComment(at pagePoint: CGPoint, on page: PDFPage, onCommit: @escaping (String) -> Void) {
+    func showInlineComment(at pagePoint: CGPoint, on page: PDFPage, initialText: String = "", onCommit: @escaping (String) -> Void, onCancel: (() -> Void)? = nil) {
         inlineEditorContainer?.removeFromSuperview()
         inlineEditorContainer = nil
 
         let viewPt = convert(pagePoint, from: page)
-        let w: CGFloat = 200, h: CGFloat = 72
+        let w: CGFloat = 200, h: CGFloat = 90
 
         let container = NSView(frame: NSRect(x: viewPt.x, y: viewPt.y, width: w, height: h))
         container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor(red: 1, green: 251/255, blue: 179/255, alpha: 0.97).cgColor
+        container.layer?.backgroundColor = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.85).cgColor
         container.layer?.cornerRadius = 4
         container.layer?.borderWidth = 0.75
         container.layer?.borderColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 0.5).cgColor
@@ -494,11 +500,12 @@ final class AnnotatingPDFView: PDFView {
         tv.isEditable = true
         tv.isRichText = false
         tv.isVerticallyResizable = true
-        tv.font = NSFont.systemFont(ofSize: 13)
+        tv.font = NSFont.systemFont(ofSize: 16)
         tv.textColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
         tv.backgroundColor = .clear
         tv.drawsBackground = false
         tv.insertionPointColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
+        tv.string = initialText
         container.addSubview(tv)
 
         inlineEditorContainer = container
@@ -509,20 +516,58 @@ final class AnnotatingPDFView: PDFView {
             container?.removeFromSuperview()
             if let self, self.inlineEditorContainer === container { self.inlineEditorContainer = nil }
             self?.window?.makeFirstResponder(self)
-            guard !cancelled else { return }
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { onCommit(trimmed) }
+            if !cancelled && !trimmed.isEmpty {
+                onCommit(trimmed)
+            } else {
+                onCancel?()
+            }
         }
     }
 
+    private func editTextAnnotation(_ annotation: PDFAnnotation, on page: PDFPage) {
+        let originalBounds = annotation.bounds
+        let originalColor = annotation.color
+        // Hide the annotation while the editor is open
+        annotation.color = .clear
+
+        let pagePoint = CGPoint(x: originalBounds.minX, y: originalBounds.maxY)
+        showInlineComment(at: pagePoint, on: page, initialText: annotation.contents ?? "",
+        onCommit: { [weak self] text in
+            guard let self else { return }
+            let font = NSFont.systemFont(ofSize: 16)
+            let measured = (text as NSString).boundingRect(
+                with: CGSize(width: originalBounds.width - 8, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: font]
+            )
+            let height = max(30, ceil(measured.height) + 12)
+            annotation.contents = text
+            annotation.bounds = CGRect(x: originalBounds.minX, y: originalBounds.maxY - height,
+                                       width: originalBounds.width, height: height)
+            annotation.color = originalColor
+            self.annotationDelegate?.pdfViewDidModify(self)
+        },
+        onCancel: {
+            annotation.color = originalColor
+        })
+    }
+
     override func mouseDown(with event: NSEvent) {
-        // Clicking anywhere on the PDF view claims focus so key shortcuts always work
-        if inlineEditorContainer == nil { window?.makeFirstResponder(self) }
+        // Always claim focus — if an inline editor is open this causes it to resign and commit
+        window?.makeFirstResponder(self)
         let loc = pageLocation(for: event)
 
         switch currentTool {
         case .pointer:
             let hit = loc.flatMap { $0.page.annotation(at: $0.point) }
+            // Double-click on a user text annotation → edit it
+            if event.clickCount == 2, let ann = hit, let hitLoc = loc,
+               !ann.isReadOnly, ann.font != nil {
+                selectAnnotation(nil)
+                editTextAnnotation(ann, on: hitLoc.page)
+                return
+            }
             selectAnnotation(hit)
             if let hit, let loc {
                 // Begin drag
@@ -611,7 +656,7 @@ final class AnnotatingPDFView: PDFView {
             draggingAnnotation = nil
             dragStartPagePoint = nil
             dragOriginalOrigin = nil
-            annotationDelegate?.pdfViewDidModify(self)  // saves PDF
+            annotationDelegate?.pdfViewDidModify(self)
         } else {
             super.mouseUp(with: event)
         }
