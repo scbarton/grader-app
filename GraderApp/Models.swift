@@ -14,6 +14,7 @@ extension UTType {
     var id: UUID = UUID()
     var name: String = ""
     var createdAt: Date = Date()
+    var d2lColumnHeader: String = ""
 
     @Relationship(deleteRule: .cascade) var rubricItems: [RubricItem] = []
     @Relationship(deleteRule: .cascade) var students: [Student] = []

@@ -72,6 +72,17 @@ struct ScorePanelView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(.bar)
+
+                if !assignment.d2lColumnHeader.isEmpty {
+                    Divider()
+                    Text(assignment.d2lColumnHeader)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
     }

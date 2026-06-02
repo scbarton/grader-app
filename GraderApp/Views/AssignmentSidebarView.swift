@@ -32,7 +32,13 @@ struct AssignmentSidebarView: View {
                     onEditRubric:   { rubricAssignment = assignment },
                     onImport:       { importerAssignment = assignment },
                     onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
-                    onExportD2L:    { d2lExportAssignment = assignment },
+                    onExportD2L:    {
+                        if assignment.d2lColumnHeader.isEmpty {
+                            d2lExportAssignment = assignment
+                        } else {
+                            CSVExporter.exportD2L(assignment: assignment, roster: roster, columnHeader: assignment.d2lColumnHeader)
+                        }
+                    },
                     onDelete:       { deleteAssignment(assignment) }
                 )
             }

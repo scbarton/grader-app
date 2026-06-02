@@ -51,6 +51,19 @@ struct RubricEditorView: View {
 
             Divider()
 
+            VStack(alignment: .leading, spacing: 4) {
+                Text("D2L Grade Column Header")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("e.g. Homework 1 Points Grade <Numeric MaxPoints:50 Weight:10 …>",
+                          text: $assignment.d2lColumnHeader)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+            }
+            .padding()
+
+            Divider()
+
             HStack {
                 Spacer()
                 Button("Done") { isPresented = false }
@@ -58,7 +71,7 @@ struct RubricEditorView: View {
             }
             .padding()
         }
-        .frame(width: 420, height: 460)
+        .frame(width: 480, height: 520)
     }
 
     private func addItem() {
