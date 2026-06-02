@@ -51,9 +51,9 @@ enum CSVExporter {
 
     // MARK: - D2L ID import
 
-    /// Parse a D2L grade export CSV and populate orgDefinedId/username on matched students (by email).
+    /// Parse a D2L grade export CSV and populate orgDefinedId/username on matching roster entries (by email).
     @discardableResult
-    static func importD2LIds(assignment: Assignment, url: URL) -> (matched: Int, skipped: Int) {
+    static func importD2LIds(into roster: [RosterEntry], from url: URL) -> (matched: Int, skipped: Int) {
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return (0, 0) }
         let lines = raw.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 2 else { return (0, 0) }
@@ -76,9 +76,9 @@ enum CSVExporter {
             let orgId = rawId.hasPrefix("#") ? String(rawId.dropFirst()) : rawId
             let uname = rawUser.hasPrefix("#") ? String(rawUser.dropFirst()) : rawUser
 
-            if let student = assignment.students.first(where: { $0.email.lowercased() == email.lowercased() }) {
-                student.orgDefinedId = orgId
-                student.username     = uname
+            if let entry = roster.first(where: { $0.email.lowercased() == email.lowercased() }) {
+                entry.orgDefinedId = orgId
+                entry.username     = uname
                 matched += 1
             } else {
                 skipped += 1
@@ -89,16 +89,20 @@ enum CSVExporter {
 
     // MARK: - D2L grade export
 
-    static func exportD2L(assignment: Assignment, columnHeader: String) {
+    static func exportD2L(assignment: Assignment, roster: [RosterEntry], columnHeader: String) {
         let students = assignment.students.sorted { $0.name < $1.name }
 
         var rows: [[String]] = []
         rows.append(["OrgDefinedId", "Username", "Last Name", "First Name", "Email", columnHeader, "End-of-Line Indicator"])
 
         for student in students {
+            // Look up D2L identity from roster by email; fall back to fields stored on student
+            let entry = roster.first { $0.email.lowercased() == student.email.lowercased() }
+            let orgId = entry?.orgDefinedId ?? student.orgDefinedId
+            let uname = entry?.username     ?? student.username
             let (last, first) = splitName(student.name)
-            let idStr   = student.orgDefinedId.isEmpty ? "" : "#\(student.orgDefinedId)"
-            let userStr = student.username.isEmpty     ? "" : "#\(student.username)"
+            let idStr   = orgId.isEmpty ? "" : "#\(orgId)"
+            let userStr = uname.isEmpty ? "" : "#\(uname)"
             rows.append([idStr, userStr, last, first, student.email, formatPts(student.totalScore), "#"])
         }
 

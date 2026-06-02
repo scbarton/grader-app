@@ -32,7 +32,6 @@ struct AssignmentSidebarView: View {
                     onEditRubric:   { rubricAssignment = assignment },
                     onImport:       { importerAssignment = assignment },
                     onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
-                    onLinkD2L:      { linkD2LIds(for: assignment) },
                     onExportD2L:    { d2lExportAssignment = assignment },
                     onDelete:       { deleteAssignment(assignment) }
                 )
@@ -94,24 +93,11 @@ struct AssignmentSidebarView: View {
             RosterView(isPresented: $showingRoster)
         }
         .sheet(item: $d2lExportAssignment) { assignment in
-            D2LExportSheet(assignment: assignment, isPresented: Binding(
+            D2LExportSheet(assignment: assignment, roster: roster, isPresented: Binding(
                 get: { d2lExportAssignment != nil },
                 set: { if !$0 { d2lExportAssignment = nil } }
             ))
         }
-    }
-
-    private func linkD2LIds(for assignment: Assignment) {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.commaSeparatedText, .plainText]
-        panel.message = "Select a D2L grade export CSV to match student IDs by email"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let result = CSVExporter.importD2LIds(assignment: assignment, url: url)
-        let alert = NSAlert()
-        alert.messageText = "D2L IDs Linked"
-        alert.informativeText = "Matched \(result.matched) student\(result.matched == 1 ? "" : "s") by email. \(result.skipped) row\(result.skipped == 1 ? "" : "s") in the CSV had no match."
-        alert.alertStyle = .informational
-        alert.runModal()
     }
 
     private func removeStudent(_ student: Student, from assignment: Assignment) {
@@ -136,7 +122,6 @@ private struct AssignmentSection: View {
     let onEditRubric: () -> Void
     let onImport: () -> Void
     let onExport: () -> Void
-    let onLinkD2L: () -> Void
     let onExportD2L: () -> Void
     let onDelete: () -> Void
 
@@ -163,8 +148,6 @@ private struct AssignmentSection: View {
                     Button("Edit Rubric…", action: onEditRubric)
                     Button("Import PDFs…", action: onImport)
                     Button("Export Graded PDFs…", action: onExport)
-                    Divider()
-                    Button("Link D2L IDs…", action: onLinkD2L)
                     Button("Export Grades for D2L…", action: onExportD2L)
                     Divider()
                     Button("Delete Assignment", role: .destructive, action: onDelete)
@@ -235,6 +218,7 @@ struct NewAssignmentSheet: View {
 
 struct D2LExportSheet: View {
     let assignment: Assignment
+    let roster: [RosterEntry]
     @Binding var isPresented: Bool
     @State private var columnHeader = ""
     @FocusState private var fieldFocused: Bool
@@ -264,6 +248,6 @@ struct D2LExportSheet: View {
 
     private func export() {
         isPresented = false
-        CSVExporter.exportD2L(assignment: assignment, columnHeader: columnHeader)
+        CSVExporter.exportD2L(assignment: assignment, roster: roster, columnHeader: columnHeader)
     }
 }

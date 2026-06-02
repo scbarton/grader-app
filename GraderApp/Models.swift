@@ -67,6 +67,8 @@ extension UTType {
     var lastName: String = ""
     var firstName: String = ""
     var email: String = ""
+    var orgDefinedId: String = ""
+    var username: String = ""
 
     var fullName: String { "\(firstName) \(lastName)" }
     var sortKey: String { "\(lastName), \(firstName)" }

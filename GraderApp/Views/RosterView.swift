@@ -20,6 +20,9 @@ struct RosterView: View {
                 Text("Class Roster")
                     .font(.headline)
                 Spacer()
+                Button("Link D2L IDs…") { importD2LIds() }
+                    .controlSize(.small)
+                    .help("Import OrgDefinedId and Username from a D2L grade export CSV")
                 Button("Import CSV…") { importCSV() }
                     .controlSize(.small)
             }
@@ -108,6 +111,19 @@ struct RosterView: View {
 
     private func clearForm() {
         firstName = ""; lastName = ""; email = ""; editingEntry = nil
+    }
+
+    private func importD2LIds() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.commaSeparatedText, .plainText]
+        panel.message = "Select a D2L grade export CSV to link OrgDefinedId and Username to roster entries by email"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let result = CSVExporter.importD2LIds(into: roster, from: url)
+        let alert = NSAlert()
+        alert.messageText = "D2L IDs Linked"
+        alert.informativeText = "Matched \(result.matched) of \(result.matched + result.skipped) students by email."
+        alert.alertStyle = .informational
+        alert.runModal()
     }
 
     private func importCSV() {
