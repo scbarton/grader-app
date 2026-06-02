@@ -41,6 +41,8 @@ extension UTType {
     var fileName: String = ""
     /// Path relative to the course bundle root, e.g. "PDFs/HW1/smith_john.pdf"
     var pdfRelativePath: String = ""
+    var orgDefinedId: String = ""
+    var username: String = ""
 
     @Relationship(deleteRule: .cascade) var scores: [Score] = []
 

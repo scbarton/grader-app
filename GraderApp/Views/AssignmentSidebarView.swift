@@ -17,6 +17,7 @@ struct AssignmentSidebarView: View {
     // Dedicated local state so assignment and sheet flag update in the same cycle
     @State private var importerAssignment: Assignment?
     @State private var rubricAssignment: Assignment?
+    @State private var d2lExportAssignment: Assignment?
 
     var body: some View {
         List(selection: $selectedStudent) {
@@ -31,6 +32,8 @@ struct AssignmentSidebarView: View {
                     onEditRubric:   { rubricAssignment = assignment },
                     onImport:       { importerAssignment = assignment },
                     onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
+                    onLinkD2L:      { linkD2LIds(for: assignment) },
+                    onExportD2L:    { d2lExportAssignment = assignment },
                     onDelete:       { deleteAssignment(assignment) }
                 )
             }
@@ -90,6 +93,25 @@ struct AssignmentSidebarView: View {
         .sheet(isPresented: $showingRoster) {
             RosterView(isPresented: $showingRoster)
         }
+        .sheet(item: $d2lExportAssignment) { assignment in
+            D2LExportSheet(assignment: assignment, isPresented: Binding(
+                get: { d2lExportAssignment != nil },
+                set: { if !$0 { d2lExportAssignment = nil } }
+            ))
+        }
+    }
+
+    private func linkD2LIds(for assignment: Assignment) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.commaSeparatedText, .plainText]
+        panel.message = "Select a D2L grade export CSV to match student IDs by email"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let result = CSVExporter.importD2LIds(assignment: assignment, url: url)
+        let alert = NSAlert()
+        alert.messageText = "D2L IDs Linked"
+        alert.informativeText = "Matched \(result.matched) student\(result.matched == 1 ? "" : "s") by email. \(result.skipped) row\(result.skipped == 1 ? "" : "s") in the CSV had no match."
+        alert.alertStyle = .informational
+        alert.runModal()
     }
 
     private func removeStudent(_ student: Student, from assignment: Assignment) {
@@ -114,6 +136,8 @@ private struct AssignmentSection: View {
     let onEditRubric: () -> Void
     let onImport: () -> Void
     let onExport: () -> Void
+    let onLinkD2L: () -> Void
+    let onExportD2L: () -> Void
     let onDelete: () -> Void
 
     private var sortedStudents: [Student] {
@@ -139,6 +163,9 @@ private struct AssignmentSection: View {
                     Button("Edit Rubric…", action: onEditRubric)
                     Button("Import PDFs…", action: onImport)
                     Button("Export Graded PDFs…", action: onExport)
+                    Divider()
+                    Button("Link D2L IDs…", action: onLinkD2L)
+                    Button("Export Grades for D2L…", action: onExportD2L)
                     Divider()
                     Button("Delete Assignment", role: .destructive, action: onDelete)
                 } label: {
@@ -203,5 +230,40 @@ struct NewAssignmentSheet: View {
             }
         }
         .padding(24).frame(width: 360)
+    }
+}
+
+struct D2LExportSheet: View {
+    let assignment: Assignment
+    @Binding var isPresented: Bool
+    @State private var columnHeader = ""
+    @FocusState private var fieldFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Export Grades for D2L").font(.headline)
+            Text("Paste the column header string from your D2L grade export file.\nExample: Homework 1 Points Grade <Numeric MaxPoints:50 Weight:10 Category:Homework CategoryWeight:20>")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("Column header", text: $columnHeader)
+                .textFieldStyle(.roundedBorder)
+                .focused($fieldFocused)
+                .onSubmit { if !columnHeader.isEmpty { export() } }
+            HStack {
+                Spacer()
+                Button("Cancel") { isPresented = false }
+                Button("Export…") { export() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(columnHeader.isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 520)
+        .onAppear { fieldFocused = true }
+    }
+
+    private func export() {
+        isPresented = false
+        CSVExporter.exportD2L(assignment: assignment, columnHeader: columnHeader)
     }
 }
