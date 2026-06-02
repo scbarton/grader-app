@@ -7,6 +7,12 @@ final class CourseManager {
     var bundleURL: URL?
     var modelContainer: ModelContainer?
     var isOpen: Bool { bundleURL != nil && modelContainer != nil }
+    private(set) var recentURLs: [URL] = []
+
+    init() {
+        recentURLs = NSDocumentController.shared.recentDocumentURLs
+            .filter { $0.pathExtension == "gradercourse" }
+    }
 
     // MARK: - Create / Open
 
@@ -58,6 +64,13 @@ final class CourseManager {
         )
 
         NSDocumentController.shared.noteNewRecentDocumentURL(url)
+        recentURLs = NSDocumentController.shared.recentDocumentURLs
+            .filter { $0.pathExtension == "gradercourse" }
+    }
+
+    func clearRecents() {
+        NSDocumentController.shared.clearRecentDocuments(nil)
+        recentURLs = []
     }
 
     func closeCourse() {
@@ -82,8 +95,4 @@ final class CourseManager {
         return base.appendingPathComponent(student.pdfRelativePath)
     }
 
-    var recentURLs: [URL] {
-        NSDocumentController.shared.recentDocumentURLs
-            .filter { $0.pathExtension == "gradercourse" }
-    }
 }

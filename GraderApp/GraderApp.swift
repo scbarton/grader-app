@@ -30,6 +30,20 @@ struct GraderApp: App {
                     .keyboardShortcut("n", modifiers: .command)
                 Button("Open Course…") { courseManager.openExisting() }
                     .keyboardShortcut("o", modifiers: .command)
+                Menu("Open Recent") {
+                    if courseManager.recentURLs.isEmpty {
+                        Text("No Recent Courses")
+                    } else {
+                        ForEach(courseManager.recentURLs, id: \.path) { url in
+                            Button(url.deletingPathExtension().lastPathComponent) {
+                                do { try courseManager.open(url: url) }
+                                catch { NSAlert(error: error).runModal() }
+                            }
+                        }
+                        Divider()
+                        Button("Clear Menu") { courseManager.clearRecents() }
+                    }
+                }
                 if courseManager.isOpen {
                     Divider()
                     Button("Close Course") { courseManager.closeCourse() }
