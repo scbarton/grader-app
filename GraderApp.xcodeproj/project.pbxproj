@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6F7E8D9C0B1A2 /* Assets.xcassets */; };
 		0592B7D70983F3197546F666 /* AssignmentSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */; };
 		0E51F28CFC775B3D65F192EC /* ScorePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D5F4E75823E072D0676326 /* ScorePanelView.swift */; };
 		3B2C5B1DA67C285D11F9E405 /* CoursePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130AC4C1A282F5AF82AB5FF0 /* CoursePicker.swift */; };
@@ -43,6 +44,7 @@
 		A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosterView.swift; sourceTree = "<group>"; };
 		A8F8A15347DB9A96F63642B5 /* GraderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraderApp.swift; sourceTree = "<group>"; };
 		B0718D65A2368FFA48909360 /* GraderApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GraderApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F1E2D3C4B5A6F7E8D9C0B1A2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B929FCD8DF21B160D8694496 /* PDFScaler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFScaler.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -93,6 +95,7 @@
 		81F28CA52DC053D450D9423B /* GraderApp */ = {
 			isa = PBXGroup;
 			children = (
+				F1E2D3C4B5A6F7E8D9C0B1A2 /* Assets.xcassets */,
 				A251DCC9BE02FA48F9A7A19E /* Helpers */,
 				437ECB64F0405FE3615BA516 /* Resources */,
 				0BDB387731DA15CF71A8004B /* Views */,
@@ -137,6 +140,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5F246D80BD66D4C4278D0E3C /* Build configuration list for PBXNativeTarget "GraderApp" */;
 			buildPhases = (
+				B1C2D3E4F5A6B7C8D9E0F1A2 /* Resources */,
 				412E829451121242804AADCB /* Sources */,
 				72B4A7AFE6234165C28B653D /* Frameworks */,
 			);
@@ -182,6 +186,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B1C2D3E4F5A6B7C8D9E0F1A2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		412E829451121242804AADCB /* Sources */ = {
