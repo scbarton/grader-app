@@ -23,6 +23,9 @@ struct ContentView: View {
             )
         } detail: {
             if let student = selectedStudent, let assignment = selectedAssignment {
+                // Access each score's points so SwiftUI tracks changes here and calls
+                // PDFViewerView.updateNSView → refreshGradeAnnotations when scores change.
+                let _ = student.scores.map { $0.points }
                 HStack(spacing: 0) {
                     PDFViewerView(student: student, assignment: assignment, bundleURL: bundleURL, tool: $annotationTool, targetedRubricItem: targetedRubricItem)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
