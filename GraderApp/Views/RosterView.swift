@@ -42,6 +42,8 @@ struct RosterView: View {
                     TableColumn("Last Name", value: \.lastName)
                     TableColumn("First Name", value: \.firstName)
                     TableColumn("Email", value: \.email)
+                    TableColumn("Username", value: \.username)
+                    TableColumn("OrgDefinedId", value: \.orgDefinedId)
                 }
                 .frame(minHeight: 180)
                 .contextMenu(forSelectionType: RosterEntry.ID.self) { ids in
