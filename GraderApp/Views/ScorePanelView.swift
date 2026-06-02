@@ -104,6 +104,7 @@ struct ScoreRow: View {
 
     @State private var pointsText: String = ""
     @FocusState private var isPointsFocused: Bool
+    @AppStorage("showScoreButtons") private var showScoreButtons: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -141,27 +142,28 @@ struct ScoreRow: View {
                 }
             }
 
-            // Quick-set buttons — horizontal scroll so they never overflow the panel
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(quickValues(for: item.maxPoints), id: \.self) { val in
-                        Button(formatPts(val)) {
-                            score.points = val
-                            pointsText = formatPts(val)
+            if showScoreButtons {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(quickValues(for: item.maxPoints), id: \.self) { val in
+                            Button(formatPts(val)) {
+                                score.points = val
+                                pointsText = formatPts(val)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                            .foregroundStyle(score.points == val ? .white : .primary)
+                            .background(score.points == val ? Color.accentColor : Color.clear)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
-                        .foregroundStyle(score.points == val ? .white : .primary)
-                        .background(score.points == val ? Color.accentColor : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                    if score.points != nil {
-                        Button(action: clearScore) {
-                            Image(systemName: "xmark")
+                        if score.points != nil {
+                            Button(action: clearScore) {
+                                Image(systemName: "xmark")
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.mini)
+                            .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.borderless)
-                        .controlSize(.mini)
-                        .foregroundStyle(.secondary)
                     }
                 }
             }

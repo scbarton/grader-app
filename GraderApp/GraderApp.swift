@@ -4,6 +4,8 @@ import SwiftData
 @main
 struct GraderApp: App {
     @State private var courseManager = CourseManager()
+    @AppStorage("showScorePanel") private var showScorePanel: Bool = true
+    @AppStorage("showScoreButtons") private var showScoreButtons: Bool = true
 
     var body: some Scene {
         WindowGroup {
@@ -57,10 +59,18 @@ struct GraderApp: App {
                 .keyboardShortcut("e", modifiers: [.command, .shift])
             }
             CommandGroup(replacing: .sidebar) {
-                Button("Toggle Sidebar") {
+                Button("Left Sidebar") {
                     NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
                 }
                 .keyboardShortcut("[", modifiers: .control)
+                Button(showScorePanel ? "Hide Right Sidebar" : "Show Right Sidebar") {
+                    showScorePanel.toggle()
+                }
+                .keyboardShortcut("]", modifiers: .control)
+                Divider()
+                Button(showScoreButtons ? "Hide Score Buttons" : "Show Score Buttons") {
+                    showScoreButtons.toggle()
+                }
             }
         }
     }

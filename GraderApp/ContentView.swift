@@ -12,6 +12,8 @@ struct ContentView: View {
     @State private var selectedStudent: Student?
     @State private var annotationTool: AnnotationTool = .pointer
     @State private var targetedRubricItem: RubricItem?
+    @AppStorage("showScorePanel") private var showScorePanel: Bool = true
+    @AppStorage("showScoreButtons") private var showScoreButtons: Bool = true
 
     var body: some View {
         NavigationSplitView {
@@ -29,9 +31,12 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     PDFViewerView(student: student, assignment: assignment, bundleURL: bundleURL, tool: $annotationTool, targetedRubricItem: targetedRubricItem)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    Divider()
-                    ScorePanelView(student: student, assignment: assignment, targetedRubricItem: $targetedRubricItem)
-                        .frame(minWidth: 280, maxWidth: 280, maxHeight: .infinity)
+                    if showScorePanel {
+                        let panelWidth: CGFloat = showScoreButtons ? 280 : 180
+                        Divider()
+                        ScorePanelView(student: student, assignment: assignment, targetedRubricItem: $targetedRubricItem)
+                            .frame(minWidth: panelWidth, maxWidth: panelWidth, maxHeight: .infinity)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .toolbar {
