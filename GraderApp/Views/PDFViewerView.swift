@@ -117,8 +117,9 @@ struct PDFViewerView: NSViewRepresentable {
         let newSnapshot = Dictionary(uniqueKeysWithValues: student.scores.map { ($0.rubricItemID, $0.points) })
 
         if url != context.coordinator.loadedURL {
-            // Student changed: save the current PDF before switching so any pending
-            // score updates are flushed to disk, then load the new PDF.
+            // Student changed: clear selection (avoids touching a stale annotation's color
+            // in savePDF), save the current PDF, then load the new one.
+            pdfView.selectAnnotation(nil)
             context.coordinator.savePDFIfNeeded()
             context.coordinator.scoreSnapshot = newSnapshot
             context.coordinator.loadedURL = url
@@ -126,10 +127,7 @@ struct PDFViewerView: NSViewRepresentable {
                 pdfView.document = PDFDocument(url: url)
                 context.coordinator.currentURL = url
                 pdfView.autoScales = true
-                DispatchQueue.main.async {
-                    pdfView.autoScales = false
-                    context.coordinator.refreshGradeAnnotations()
-                }
+                DispatchQueue.main.async { pdfView.autoScales = false }
             }
             DispatchQueue.main.async { pdfView.window?.makeFirstResponder(pdfView) }
         } else if newSnapshot != context.coordinator.scoreSnapshot {
