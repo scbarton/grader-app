@@ -29,12 +29,10 @@ struct AnnotationToolbar: ToolbarContent {
             }
             .help("Add text comment · click anywhere on the PDF · shortcut: C")
 
-            Button {
-                NotificationCenter.default.post(name: Self.highlightNotification, object: nil)
-            } label: {
-                Label("Highlight", systemImage: "highlighter")
+            ToolButton(label: "Highlight", icon: "highlighter", active: tool == .highlight) {
+                tool = .highlight
             }
-            .help("Highlight selected text · select text first, then click · shortcut: H")
+            .help("Highlight text · select tool, drag to select text · shortcut: H")
 
             Divider()
 

@@ -127,7 +127,12 @@ struct PDFViewerView: NSViewRepresentable {
                 pdfView.document = PDFDocument(url: url)
                 context.coordinator.currentURL = url
                 pdfView.autoScales = true
-                DispatchQueue.main.async { pdfView.autoScales = false }
+                DispatchQueue.main.async {
+                    pdfView.autoScales = false
+                    DispatchQueue.main.async {
+                        context.coordinator.scrollToRelevantStamp()
+                    }
+                }
             }
             DispatchQueue.main.async { pdfView.window?.makeFirstResponder(pdfView) }
         } else if newSnapshot != context.coordinator.scoreSnapshot {
@@ -214,14 +219,15 @@ struct PDFViewerView: NSViewRepresentable {
             pdfView?.showInlineComment(at: point, on: page) { [weak self] text in
                 guard let self else { return }
                 let font = NSFont.systemFont(ofSize: 16)
-                let annotationWidth: CGFloat = 200
+                let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
                 let measured = (text as NSString).boundingRect(
-                    with: CGSize(width: annotationWidth - 8, height: .greatestFiniteMagnitude),
+                    with: CGSize(width: 192, height: CGFloat.greatestFiniteMagnitude),
                     options: [.usesLineFragmentOrigin, .usesFontLeading],
                     attributes: [.font: font]
                 )
-                let height = max(30, ceil(measured.height) + 12)
-                let bounds = CGRect(x: point.x, y: point.y - height, width: annotationWidth, height: height)
+                let textExtent = max(30, ceil(measured.height) + 12)
+                let (w, h): (CGFloat, CGFloat) = rotated ? (textExtent, 200) : (200, textExtent)
+                let bounds = CGRect(x: point.x, y: point.y - h / 2, width: w, height: h)
                 let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
                 annotation.contents = text
                 annotation.color = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.5)
@@ -233,7 +239,7 @@ struct PDFViewerView: NSViewRepresentable {
 
         private func addStamp(type: AnnotationTool.StampType, page: PDFPage, at point: CGPoint) {
             let size: CGFloat = 36
-            let bounds = CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+            let bounds = CGRect(x: point.x, y: point.y - size / 2, width: size, height: size)
             let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
             annotation.contents = type.symbol
             annotation.font = NSFont.systemFont(ofSize: 26)
@@ -280,6 +286,29 @@ struct PDFViewerView: NSViewRepresentable {
                 if let ann = page.annotations.first(where: { $0.userName == tag }) {
                     let dest = PDFDestination(page: page, at: ann.bounds.origin)
                     pdfView?.go(to: dest)
+                    return
+                }
+            }
+        }
+
+        func scrollToRelevantStamp() {
+            guard let doc = pdfView?.document else { return }
+            // Try the targeted rubric item first
+            if let item = targetedRubricItem {
+                let tag = "grader.grade.\(item.id.uuidString)"
+                for i in 0..<doc.pageCount {
+                    guard let page = doc.page(at: i) else { continue }
+                    if let ann = page.annotations.first(where: { $0.userName == tag }) {
+                        pdfView?.go(to: PDFDestination(page: page, at: ann.bounds.origin))
+                        return
+                    }
+                }
+            }
+            // Fallback: last grade stamp by page order (grading proceeds top to bottom)
+            for i in stride(from: doc.pageCount - 1, through: 0, by: -1) {
+                guard let page = doc.page(at: i) else { continue }
+                if let ann = page.annotations.first(where: { $0.userName?.hasPrefix("grader.grade.") == true }) {
+                    pdfView?.go(to: PDFDestination(page: page, at: ann.bounds.origin))
                     return
                 }
             }
@@ -485,7 +514,7 @@ final class AnnotatingPDFView: PDFView {
         let viewPt = convert(pagePoint, from: page)
         let w: CGFloat = 200, h: CGFloat = 90
 
-        let container = NSView(frame: NSRect(x: viewPt.x, y: viewPt.y, width: w, height: h))
+        let container = NSView(frame: NSRect(x: viewPt.x, y: viewPt.y - h / 2, width: w, height: h))
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.85).cgColor
         container.layer?.cornerRadius = 4
@@ -531,7 +560,7 @@ final class AnnotatingPDFView: PDFView {
         // Hide the annotation while the editor is open
         annotation.color = .clear
 
-        let pagePoint = CGPoint(x: originalBounds.minX, y: originalBounds.maxY)
+        let pagePoint = CGPoint(x: originalBounds.minX, y: originalBounds.midY)
         showInlineComment(at: pagePoint, on: page, initialText: annotation.contents ?? "",
         onCommit: { [weak self] text in
             guard let self else { return }
@@ -543,7 +572,7 @@ final class AnnotatingPDFView: PDFView {
             )
             let height = max(30, ceil(measured.height) + 12)
             annotation.contents = text
-            annotation.bounds = CGRect(x: originalBounds.minX, y: originalBounds.maxY - height,
+            annotation.bounds = CGRect(x: originalBounds.minX, y: originalBounds.midY - height / 2,
                                        width: originalBounds.width, height: height)
             annotation.color = originalColor
             self.annotationDelegate?.pdfViewDidModify(self)
@@ -659,6 +688,9 @@ final class AnnotatingPDFView: PDFView {
             annotationDelegate?.pdfViewDidModify(self)
         } else {
             super.mouseUp(with: event)
+            if currentTool == .highlight {
+                annotationDelegate?.pdfViewApplyHighlight(self)
+            }
         }
     }
 
