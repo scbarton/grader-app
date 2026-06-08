@@ -3,7 +3,7 @@ import SwiftData
 
 struct AssignmentSidebarView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \Assignment.createdAt) private var assignments: [Assignment]
+    @Query(sort: \Assignment.name) private var assignments: [Assignment]
     @Query(sort: \RosterEntry.lastName) private var roster: [RosterEntry]
 
     let bundleURL: URL
@@ -13,7 +13,7 @@ struct AssignmentSidebarView: View {
 
     @State private var showingNewAssignment = false
     @State private var showingRoster = false
-    @State private var collapsedIDs: Set<UUID> = []
+    @State private var expandedIDs: Set<UUID> = []
     // Dedicated local state so assignment and sheet flag update in the same cycle
     @State private var importerAssignment: Assignment?
     @State private var rubricAssignment: Assignment?
@@ -25,8 +25,8 @@ struct AssignmentSidebarView: View {
                 AssignmentSection(
                     assignment: assignment,
                     isExpanded: Binding(
-                        get: { !collapsedIDs.contains(assignment.id) },
-                        set: { if $0 { collapsedIDs.remove(assignment.id) } else { collapsedIDs.insert(assignment.id) } }
+                        get: { expandedIDs.contains(assignment.id) },
+                        set: { if $0 { expandedIDs.insert(assignment.id) } else { expandedIDs.remove(assignment.id) } }
                     ),
                     onRemoveStudent: { removeStudent($0, from: assignment) },
                     onEditRubric:   { rubricAssignment = assignment },
@@ -150,22 +150,46 @@ private struct AssignmentSection: View {
             HStack {
                 Text(assignment.name).font(.headline).foregroundStyle(.primary)
                 Spacer()
-                Menu {
-                    Button("Edit Rubric…", action: onEditRubric)
-                    Button("Import PDFs…", action: onImport)
-                    Button("Export Graded PDFs…", action: onExport)
-                    Button("Export Grades for D2L…", action: onExportD2L)
-                    Divider()
-                    Button("Delete Assignment", role: .destructive, action: onDelete)
+                Button {
+                    let menu = NSMenu()
+                    menu.addItem(withTitle: "Edit Rubric…",          action: onEditRubric)
+                    menu.addItem(withTitle: "Import PDFs…",          action: onImport)
+                    menu.addItem(withTitle: "Export Graded PDFs…",   action: onExport)
+                    menu.addItem(withTitle: "Export Grades for D2L…",action: onExportD2L)
+                    menu.addItem(.separator())
+                    menu.addItem(withTitle: "Delete Assignment", action: onDelete, destructive: true)
+                    if let event = NSApp.currentEvent {
+                        NSMenu.popUpContextMenu(menu, with: event, for: NSView())
+                    }
                 } label: {
-                    Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundStyle(.secondary)
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+                .buttonStyle(.plain)
                 .onTapGesture {}
             }
         }
     }
+}
+
+private extension NSMenu {
+    func addItem(withTitle title: String, action: @escaping () -> Void, destructive: Bool = false) {
+        let holder = MenuActionHolder(action)
+        let item = NSMenuItem(title: title, action: #selector(MenuActionHolder.invoke), keyEquivalent: "")
+        item.target = holder
+        item.representedObject = holder
+        if destructive {
+            item.attributedTitle = NSAttributedString(
+                string: title, attributes: [.foregroundColor: NSColor.systemRed])
+        }
+        addItem(item)
+    }
+}
+
+private class MenuActionHolder: NSObject {
+    private let action: () -> Void
+    init(_ action: @escaping () -> Void) { self.action = action }
+    @objc func invoke() { action() }
 }
 
 struct StudentRow: View {
