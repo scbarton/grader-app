@@ -6,6 +6,7 @@ APP="$DIR/build/Release/Grader.app"
 ZIP="$DIR/build/Release/Grader.zip"
 SIGN_ID="Developer ID Application: Scott Calabrese Barton (WR7X27PQB5)"
 ENTITLEMENTS="$DIR/GraderApp/Resources/GraderApp.entitlements"
+VERSION="v$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP/Contents/Info.plist")"
 
 echo "==> Signing..."
 codesign --deep --force --verify \
@@ -30,7 +31,7 @@ echo "==> Re-zipping stapled app..."
 rm -f "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 
-echo "==> Uploading to GitHub release v0.5..."
-gh release upload v0.5.1 "$ZIP" --clobber --repo scbarton/grader-app
+echo "==> Uploading to GitHub release $VERSION..."
+gh release upload "$VERSION" "$ZIP" --clobber --repo scbarton/grader-app
 
 echo "Done: signed, notarized, stapled, uploaded."
