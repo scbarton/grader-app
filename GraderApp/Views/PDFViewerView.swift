@@ -238,11 +238,11 @@ struct PDFViewerView: NSViewRepresentable {
         }
 
         private func addStamp(type: AnnotationTool.StampType, page: PDFPage, at point: CGPoint) {
-            let size: CGFloat = 36
+            let size: CGFloat = 24
             let bounds = CGRect(x: point.x, y: point.y - size / 2, width: size, height: size)
             let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
             annotation.contents = type.symbol
-            annotation.font = NSFont.systemFont(ofSize: 26)
+            annotation.font = NSFont.systemFont(ofSize: 12)
             annotation.color = .clear
             annotation.alignment = .center
             annotation.isReadOnly = true
@@ -278,14 +278,20 @@ struct PDFViewerView: NSViewRepresentable {
             if didUpdate { savePDF() }
         }
 
+        // Scroll so the annotation is visible with ~2 cm of space above it.
+        private func scrollAbove(_ ann: PDFAnnotation, on page: PDFPage) {
+            let abovePts: CGFloat = 57  // ~2 cm in PDF points
+            let y = min(ann.bounds.maxY + abovePts, page.bounds(for: .mediaBox).maxY)
+            pdfView?.go(to: PDFDestination(page: page, at: CGPoint(x: ann.bounds.midX, y: y)))
+        }
+
         func scrollToGradeStamp(for item: RubricItem) {
             guard let doc = pdfView?.document else { return }
             let tag = "grader.grade.\(item.id.uuidString)"
             for i in 0..<doc.pageCount {
                 guard let page = doc.page(at: i) else { continue }
                 if let ann = page.annotations.first(where: { $0.userName == tag }) {
-                    let dest = PDFDestination(page: page, at: ann.bounds.origin)
-                    pdfView?.go(to: dest)
+                    scrollAbove(ann, on: page)
                     return
                 }
             }
@@ -299,7 +305,7 @@ struct PDFViewerView: NSViewRepresentable {
                 for i in 0..<doc.pageCount {
                     guard let page = doc.page(at: i) else { continue }
                     if let ann = page.annotations.first(where: { $0.userName == tag }) {
-                        pdfView?.go(to: PDFDestination(page: page, at: ann.bounds.origin))
+                        scrollAbove(ann, on: page)
                         return
                     }
                 }
@@ -308,7 +314,7 @@ struct PDFViewerView: NSViewRepresentable {
             for i in stride(from: doc.pageCount - 1, through: 0, by: -1) {
                 guard let page = doc.page(at: i) else { continue }
                 if let ann = page.annotations.first(where: { $0.userName?.hasPrefix("grader.grade.") == true }) {
-                    pdfView?.go(to: PDFDestination(page: page, at: ann.bounds.origin))
+                    scrollAbove(ann, on: page)
                     return
                 }
             }
