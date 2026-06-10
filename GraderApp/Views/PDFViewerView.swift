@@ -218,7 +218,7 @@ struct PDFViewerView: NSViewRepresentable {
         private func showTextAnnotation(page: PDFPage, at point: CGPoint) {
             pdfView?.showInlineComment(at: point, on: page) { [weak self] text in
                 guard let self else { return }
-                let font = NSFont.systemFont(ofSize: 16)
+                let font = NSFont.systemFont(ofSize: 12)
                 let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
                 let measured = (text as NSString).boundingRect(
                     with: CGSize(width: 192, height: CGFloat.greatestFiniteMagnitude),
@@ -232,7 +232,7 @@ struct PDFViewerView: NSViewRepresentable {
                 annotation.contents = text
                 annotation.color = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.5)
                 annotation.fontColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
-                annotation.font = NSFont.systemFont(ofSize: 16)
+                annotation.font = NSFont.systemFont(ofSize: 12)
                 self.addAnnotationWithUndo(annotation, to: page)
             }
         }
@@ -317,11 +317,14 @@ struct PDFViewerView: NSViewRepresentable {
         private func placeGradeStamp(for item: RubricItem, at point: CGPoint, on page: PDFPage) {
             guard let doc = pdfView?.document else { return }
 
-            // Remove any existing stamp for this problem across all pages
+            // Collect and remove any existing stamp for this problem (saved for undo)
             let tag = "grader.grade.\(item.id.uuidString)"
+            var previousStamps: [(PDFPage, PDFAnnotation)] = []
             for i in 0..<doc.pageCount {
                 guard let p = doc.page(at: i) else { continue }
-                p.annotations.filter { $0.userName == tag }.forEach { p.removeAnnotation($0) }
+                let existing = p.annotations.filter { $0.userName == tag }
+                previousStamps.append(contentsOf: existing.map { (p, $0) })
+                existing.forEach { p.removeAnnotation($0) }
             }
 
             let score = student?.scores.first { $0.rubricItemID == item.id }
@@ -335,6 +338,16 @@ struct PDFViewerView: NSViewRepresentable {
             let bounds = CGRect(x: point.x, y: point.y - h / 2, width: w, height: h)
             let ann = makeGradeAnnotation(text: text, bounds: bounds, tag: tag)
             page.addAnnotation(ann)
+
+            pdfView?.undoManager?.registerUndo(withTarget: self) { coord in
+                page.removeAnnotation(ann)
+                for (oldPage, oldAnn) in previousStamps {
+                    oldPage.addAnnotation(oldAnn)
+                }
+                coord.updateSummary()
+                coord.savePDF()
+            }
+            pdfView?.undoManager?.setActionName("Place Grade Stamp")
 
             updateSummary()
             savePDF()
@@ -564,7 +577,7 @@ final class AnnotatingPDFView: PDFView {
         showInlineComment(at: pagePoint, on: page, initialText: annotation.contents ?? "",
         onCommit: { [weak self] text in
             guard let self else { return }
-            let font = NSFont.systemFont(ofSize: 16)
+            let font = NSFont.systemFont(ofSize: 12)
             let measured = (text as NSString).boundingRect(
                 with: CGSize(width: originalBounds.width - 8, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
