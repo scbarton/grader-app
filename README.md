@@ -1,4 +1,4 @@
-# GraderApp
+# Grader.app
 
 A native macOS app for annotating and grading student PDF submissions. Built with SwiftUI, PDFKit, and SwiftData.
 
