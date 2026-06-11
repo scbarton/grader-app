@@ -154,7 +154,8 @@ struct ImporterView: View {
                 } catch {
                     continue
                 }
-                // Scale to letter size in the bundle
+                // Fix scanner rotation flags, then scale to letter size
+                PDFScaler.fixRotationIfNeeded(url: dest)
                 PDFScaler.scaleToLetterIfNeeded(url: dest)
 
                 let relative = "PDFs/\(assignmentName)/\(file.url.lastPathComponent)"

@@ -47,6 +47,66 @@ enum PDFScaler {
         }
     }
 
+    /// Rewrites `url` in-place, baking any page rotation into the content and clearing the flag.
+    /// Scanners (e.g. Xerox) embed a rotation flag that Preview honors but PDFKit ignores during
+    /// annotation placement, causing stamps to land in the wrong position.
+    static func fixRotationIfNeeded(url: URL) {
+        guard let source = CGPDFDocument(url as CFURL) else { return }
+        guard (1...source.numberOfPages).contains(where: { source.page(at: $0).map { $0.rotationAngle != 0 } ?? false }) else { return }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("grader_rot_\(UUID().uuidString).pdf")
+
+        // Pass nil mediaBox so we set it per-page
+        guard let ctx = CGContext(tempURL as CFURL, mediaBox: nil, nil) else { return }
+
+        for i in 1...source.numberOfPages {
+            guard let page = source.page(at: i) else { continue }
+            let rotation = page.rotationAngle  // degrees CW (CGPDFPage convention)
+            let srcBox = page.getBoxRect(.mediaBox)
+
+            // Display size after rotation
+            let swapAxes = (rotation == 90 || rotation == 270)
+            let displaySize = swapAxes
+                ? CGSize(width: srcBox.height, height: srcBox.width)
+                : srcBox.size
+            var pageRect = CGRect(origin: .zero, size: displaySize)
+
+            ctx.beginPage(mediaBox: &pageRect)
+            ctx.saveGState()
+
+            // Un-rotate: bake the rotation into the content
+            switch rotation {
+            case 90:   // CGPDFPage CW 90° = CCW 270° display
+                ctx.translateBy(x: 0, y: srcBox.width)
+                ctx.rotate(by: -CGFloat.pi / 2)
+            case 180:
+                ctx.translateBy(x: srcBox.width, y: srcBox.height)
+                ctx.rotate(by: CGFloat.pi)
+            case 270:  // CGPDFPage CW 270° = CCW 90° display
+                ctx.translateBy(x: srcBox.height, y: 0)
+                ctx.rotate(by: CGFloat.pi / 2)
+            default:
+                break
+            }
+
+            if srcBox.origin != .zero {
+                ctx.translateBy(x: -srcBox.origin.x, y: -srcBox.origin.y)
+            }
+            ctx.drawPDFPage(page)
+            ctx.restoreGState()
+            ctx.endPage()
+        }
+        ctx.closePDF()
+
+        do {
+            try FileManager.default.removeItem(at: url)
+            try FileManager.default.moveItem(at: tempURL, to: url)
+        } catch {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+    }
+
     private static func pageNeedsScaling(_ doc: CGPDFDocument) -> Bool {
         let tol: CGFloat = 2
         for i in 1...doc.numberOfPages {
