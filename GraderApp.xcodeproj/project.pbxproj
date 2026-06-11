@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6F7E8D9C0B1A2 /* Assets.xcassets */; };
 		0592B7D70983F3197546F666 /* AssignmentSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */; };
 		0E51F28CFC775B3D65F192EC /* ScorePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D5F4E75823E072D0676326 /* ScorePanelView.swift */; };
 		3B2C5B1DA67C285D11F9E405 /* CoursePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130AC4C1A282F5AF82AB5FF0 /* CoursePicker.swift */; };
@@ -16,6 +15,7 @@
 		86AC3C1C9686D16B40B708BC /* AnnotationToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718198BEA16FAE38B63AF8CE /* AnnotationToolbar.swift */; };
 		8F97CD5529AFADCE48930C71 /* PDFScaler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B929FCD8DF21B160D8694496 /* PDFScaler.swift */; };
 		93A44FCCB28930712E5989FE /* GraderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F8A15347DB9A96F63642B5 /* GraderApp.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6F7E8D9C0B1A2 /* Assets.xcassets */; };
 		CB412AE0C660E0509EB7B5A3 /* RubricEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16F440F44CFFB58CDE84D8C3 /* RubricEditorView.swift */; };
 		CB9FA07FD95C9572CC940CED /* CourseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 578DAE91F702021B35E61D39 /* CourseManager.swift */; };
 		D1C5398C9D4E5F4D64F2C66D /* RosterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */; };
@@ -43,9 +43,9 @@
 		9760991382027D53C5E6D169 /* AssignmentSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssignmentSidebarView.swift; sourceTree = "<group>"; };
 		A21FDD3AD4C2698CCBF1CA0D /* RosterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RosterView.swift; sourceTree = "<group>"; };
 		A8F8A15347DB9A96F63642B5 /* GraderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraderApp.swift; sourceTree = "<group>"; };
-		B0718D65A2368FFA48909360 /* GraderApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GraderApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F1E2D3C4B5A6F7E8D9C0B1A2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B0718D65A2368FFA48909360 /* GraderApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = GraderApp.app; path = Grader.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B929FCD8DF21B160D8694496 /* PDFScaler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFScaler.swift; sourceTree = "<group>"; };
+		F1E2D3C4B5A6F7E8D9C0B1A2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

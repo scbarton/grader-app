@@ -101,6 +101,7 @@ struct PDFViewerView: NSViewRepresentable {
         pdfView.currentTool = tool
         context.coordinator.toolBinding = _tool
         context.coordinator.student = student
+        context.coordinator.assignment = assignment
         context.coordinator.rubricItems = assignment.rubricItems.sorted { $0.order < $1.order }
 
         // Scroll to grade stamp when targeted problem changes
@@ -130,6 +131,7 @@ struct PDFViewerView: NSViewRepresentable {
                 DispatchQueue.main.async {
                     pdfView.autoScales = false
                     DispatchQueue.main.async {
+                        context.coordinator.ensureQuizStamps()
                         context.coordinator.scrollToRelevantStamp()
                     }
                 }
@@ -152,6 +154,7 @@ struct PDFViewerView: NSViewRepresentable {
         var currentURL: URL?
         var toolBinding: Binding<AnnotationTool>?
         var student: Student?
+        var assignment: Assignment?
         var rubricItems: [RubricItem] = []
         var targetedRubricItem: RubricItem?
         var scoreSnapshot: [UUID: Double?] = [:]
@@ -258,6 +261,7 @@ struct PDFViewerView: NSViewRepresentable {
 
         func refreshGradeAnnotations() {
             guard let doc = pdfView?.document, let student = student else { return }
+            ensureQuizStamps()
             var didUpdate = false
             for item in rubricItems {
                 let tag = "grader.grade.\(item.id.uuidString)"
@@ -333,6 +337,16 @@ struct PDFViewerView: NSViewRepresentable {
                 existing.forEach { p.removeAnnotation($0) }
             }
 
+            // Quiz: save canonical stamp position; capture previous for undo
+            let prevPageIndex = item.stampPageIndex
+            let prevX = item.stampX
+            let prevY = item.stampY
+            if assignment?.category == .quiz {
+                item.stampPageIndex = doc.index(for: page)
+                item.stampX = Double(point.x)
+                item.stampY = Double(point.y)
+            }
+
             let score = student?.scores.first { $0.rubricItemID == item.id }
             let earnedText = score?.points.map { fmtPts($0) } ?? "—"
             let text = "\(item.name)\n\(earnedText) / \(fmtPts(item.maxPoints))"
@@ -350,6 +364,11 @@ struct PDFViewerView: NSViewRepresentable {
                 for (oldPage, oldAnn) in previousStamps {
                     oldPage.addAnnotation(oldAnn)
                 }
+                if coord.assignment?.category == .quiz {
+                    item.stampPageIndex = prevPageIndex
+                    item.stampX = prevX
+                    item.stampY = prevY
+                }
                 coord.updateSummary()
                 coord.savePDF()
             }
@@ -357,6 +376,33 @@ struct PDFViewerView: NSViewRepresentable {
 
             updateSummary()
             savePDF()
+        }
+
+        func ensureQuizStamps() {
+            guard assignment?.category == .quiz,
+                  let doc = pdfView?.document,
+                  let student = student else { return }
+            var didPlace = false
+            for item in rubricItems {
+                guard let pageIndex = item.stampPageIndex,
+                      let x = item.stampX,
+                      let y = item.stampY,
+                      let page = doc.page(at: pageIndex) else { continue }
+                let tag = "grader.grade.\(item.id.uuidString)"
+                let alreadyPlaced = (0..<doc.pageCount).contains { i in
+                    doc.page(at: i)?.annotations.contains { $0.userName == tag } == true
+                }
+                guard !alreadyPlaced else { continue }
+                let score = student.scores.first { $0.rubricItemID == item.id }
+                let earnedText = score?.points.map { fmtPts($0) } ?? "—"
+                let text = "\(item.name)\n\(earnedText) / \(fmtPts(item.maxPoints))"
+                let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
+                let (w, h): (CGFloat, CGFloat) = rotated ? (36, 120) : (120, 36)
+                let bounds = CGRect(x: CGFloat(x), y: CGFloat(y) - h / 2, width: w, height: h)
+                page.addAnnotation(makeGradeAnnotation(text: text, bounds: bounds, tag: tag))
+                didPlace = true
+            }
+            if didPlace { savePDF() }
         }
 
         @discardableResult

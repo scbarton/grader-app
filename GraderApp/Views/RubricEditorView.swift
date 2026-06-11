@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct RubricEditorView: View {
     @Bindable var assignment: Assignment
@@ -13,9 +14,21 @@ struct RubricEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Rubric — \(assignment.name)")
-                .font(.headline)
-                .padding()
+            HStack {
+                Text("Rubric — \(assignment.name)")
+                    .font(.headline)
+                Spacer()
+                Picker("", selection: Binding(
+                    get: { assignment.category },
+                    set: { assignment.category = $0 }
+                )) {
+                    Text("Homework").tag(AssignmentCategory.homework)
+                    Text("Quiz").tag(AssignmentCategory.quiz)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 160)
+            }
+            .padding()
 
             Divider()
 

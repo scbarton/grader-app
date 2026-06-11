@@ -8,6 +8,13 @@ extension UTType {
     static let gradercourse = UTType(exportedAs: "org.powrbox.gradercourse")
 }
 
+// MARK: - Assignment category
+
+enum AssignmentCategory: String {
+    case homework
+    case quiz
+}
+
 // MARK: - SwiftData models
 
 @Model final class Assignment {
@@ -15,11 +22,16 @@ extension UTType {
     var name: String = ""
     var createdAt: Date = Date()
     var d2lColumnHeader: String = ""
+    var categoryRaw: String = "homework"
 
     @Relationship(deleteRule: .cascade) var rubricItems: [RubricItem] = []
     @Relationship(deleteRule: .cascade) var students: [Student] = []
 
     var maxPoints: Double { rubricItems.reduce(0) { $0 + $1.maxPoints } }
+    var category: AssignmentCategory {
+        get { AssignmentCategory(rawValue: categoryRaw) ?? .homework }
+        set { categoryRaw = newValue.rawValue }
+    }
 
     init(name: String) { self.name = name }
 }
@@ -29,6 +41,10 @@ extension UTType {
     var name: String = ""
     var maxPoints: Double = 10
     var order: Int = 0
+    // Quiz: shared stamp position in PDF page coordinates (nil = not yet placed)
+    var stampPageIndex: Int? = nil
+    var stampX: Double? = nil
+    var stampY: Double? = nil
 
     init(name: String, maxPoints: Double, order: Int) {
         self.name = name; self.maxPoints = maxPoints; self.order = order
@@ -40,7 +56,6 @@ extension UTType {
     var name: String = ""
     var email: String = ""
     var fileName: String = ""
-    /// Path relative to the course bundle root, e.g. "PDFs/HW1/smith_john.pdf"
     var pdfRelativePath: String = ""
     var orgDefinedId: String = ""
     var username: String = ""
