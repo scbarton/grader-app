@@ -282,6 +282,9 @@ struct PDFViewerView: NSViewRepresentable {
             if didUpdate { savePDF() }
         }
 
+        // TODO: moving a quiz grade stamp with the pointer tool doesn't update the stored
+        // position or propagate to other students — re-placing with the grade tool is the fix.
+
         // Scroll so the annotation is visible with ~2 cm of space above it.
         private func scrollAbove(_ ann: PDFAnnotation, on page: PDFPage) {
             let abovePts: CGFloat = 57  // ~2 cm in PDF points
