@@ -7,6 +7,7 @@ struct ImporterView: View {
     @Binding var isPresented: Bool
     var roster: [RosterEntry] = []
     let bundleURL: URL
+    var initialURLs: [URL] = []
 
     @Environment(\.modelContext) private var context
 
@@ -82,6 +83,7 @@ struct ImporterView: View {
             }
         }
         .frame(width: 560, height: 440)
+        .onAppear { if !initialURLs.isEmpty { addURLs(initialURLs) } }
     }
 
     // MARK: - Browse / Drop

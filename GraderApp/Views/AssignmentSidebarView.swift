@@ -16,6 +16,7 @@ struct AssignmentSidebarView: View {
     @State private var expandedIDs: Set<UUID> = []
     // Dedicated local state so assignment and sheet flag update in the same cycle
     @State private var importerAssignment: Assignment?
+    @State private var importerInitialURLs: [URL] = []
     @State private var rubricAssignment: Assignment?
     @State private var d2lExportAssignment: Assignment?
 
@@ -24,13 +25,15 @@ struct AssignmentSidebarView: View {
             ForEach(assignments) { assignment in
                 AssignmentSection(
                     assignment: assignment,
+                    bundleURL: bundleURL,
                     isExpanded: Binding(
                         get: { expandedIDs.contains(assignment.id) },
                         set: { if $0 { expandedIDs.insert(assignment.id) } else { expandedIDs.remove(assignment.id) } }
                     ),
                     onRemoveStudent: { removeStudent($0, from: assignment) },
                     onEditRubric:   { rubricAssignment = assignment },
-                    onImport:       { importerAssignment = assignment },
+                    onImport:       { importerInitialURLs = []; importerAssignment = assignment },
+                    onDropFiles:    { urls in importerInitialURLs = urls; importerAssignment = assignment },
                     onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
                     onExportD2L:    {
                         if assignment.d2lColumnHeader.isEmpty {
@@ -92,7 +95,8 @@ struct AssignmentSidebarView: View {
                     set: { if !$0 { importerAssignment = nil } }
                 ),
                 roster: roster,
-                bundleURL: bundleURL
+                bundleURL: bundleURL,
+                initialURLs: importerInitialURLs
             )
         }
         .sheet(isPresented: $showingRoster) {
@@ -123,13 +127,17 @@ struct AssignmentSidebarView: View {
 
 private struct AssignmentSection: View {
     let assignment: Assignment
+    let bundleURL: URL
     @Binding var isExpanded: Bool
     let onRemoveStudent: (Student) -> Void
     let onEditRubric: () -> Void
     let onImport: () -> Void
+    let onDropFiles: ([URL]) -> Void
     let onExport: () -> Void
     let onExportD2L: () -> Void
     let onDelete: () -> Void
+
+    @State private var isDropTargeted = false
 
     private var sortedStudents: [Student] {
         assignment.students.sorted { $0.name < $1.name }
@@ -141,6 +149,10 @@ private struct AssignmentSection: View {
                 StudentRow(student: student, rubricItems: assignment.rubricItems)
                     .tag(student)
                     .contextMenu {
+                        Button("Export PDF…") {
+                            PDFExporter.exportSingle(student: student, assignment: assignment, bundleURL: bundleURL)
+                        }
+                        Divider()
                         Button("Remove Student", role: .destructive) {
                             onRemoveStudent(student)
                         }
@@ -148,7 +160,7 @@ private struct AssignmentSection: View {
             }
         } label: {
             HStack {
-                Text(assignment.name).font(.headline).foregroundStyle(.primary)
+                Text(assignment.name).font(.headline).foregroundStyle(isDropTargeted ? Color.accentColor : .primary)
                 Spacer()
                 Button {
                     let menu = NSMenu()
@@ -167,6 +179,22 @@ private struct AssignmentSection: View {
                 }
                 .buttonStyle(.plain)
                 .onTapGesture {}
+            }
+            .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+                var urls: [URL] = []
+                let group = DispatchGroup()
+                for provider in providers {
+                    group.enter()
+                    provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                        defer { group.leave() }
+                        guard let data = item as? Data,
+                              let url = URL(dataRepresentation: data, relativeTo: nil),
+                              url.pathExtension.lowercased() == "pdf" else { return }
+                        urls.append(url)
+                    }
+                }
+                group.notify(queue: .main) { if !urls.isEmpty { onDropFiles(urls) } }
+                return true
             }
         }
     }

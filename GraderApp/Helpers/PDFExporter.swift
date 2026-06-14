@@ -4,6 +4,29 @@ import Foundation
 
 enum PDFExporter {
 
+    static func exportSingle(student: Student, assignment: Assignment, bundleURL: URL) {
+        guard !student.pdfRelativePath.isEmpty,
+              let document = PDFDocument(url: bundleURL.appendingPathComponent(student.pdfRelativePath)) else {
+            let alert = NSAlert()
+            alert.messageText = "Could not read PDF for \(student.name)"
+            alert.runModal()
+            return
+        }
+        let rubric = assignment.rubricItems.sorted { $0.order < $1.order }
+        if !rubric.isEmpty, let page = makeRubricPage(student: student, rubric: rubric, assignmentName: assignment.name) {
+            document.insert(page, at: document.pageCount)
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = student.fileName
+        panel.allowedContentTypes = [.pdf]
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        if !document.write(to: dest) {
+            let alert = NSAlert()
+            alert.messageText = "Export failed"
+            alert.runModal()
+        }
+    }
+
     static func showExportPanel(for assignment: Assignment, bundleURL: URL) {
         let panel = NSOpenPanel()
         panel.message = "Choose a destination folder for the graded PDFs"

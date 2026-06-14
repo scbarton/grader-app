@@ -357,7 +357,7 @@ struct PDFViewerView: NSViewRepresentable {
             // On 90°/270° rotated pages the PDF axes are swapped, so swap w/h so the
             // stamp appears wide and short rather than skinny and tall
             let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
-            let (w, h): (CGFloat, CGFloat) = rotated ? (36, 120) : (120, 36)
+            let (w, h): (CGFloat, CGFloat) = rotated ? (36, 60) : (60, 36)
             let bounds = CGRect(x: point.x, y: point.y - h / 2, width: w, height: h)
             let ann = makeGradeAnnotation(text: text, bounds: bounds, tag: tag)
             page.addAnnotation(ann)
@@ -400,7 +400,7 @@ struct PDFViewerView: NSViewRepresentable {
                 let earnedText = score?.points.map { fmtPts($0) } ?? "—"
                 let text = "\(item.name)\n\(earnedText) / \(fmtPts(item.maxPoints))"
                 let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
-                let (w, h): (CGFloat, CGFloat) = rotated ? (36, 120) : (120, 36)
+                let (w, h): (CGFloat, CGFloat) = rotated ? (36, 60) : (60, 36)
                 let bounds = CGRect(x: CGFloat(x), y: CGFloat(y) - h / 2, width: w, height: h)
                 page.addAnnotation(makeGradeAnnotation(text: text, bounds: bounds, tag: tag))
                 didPlace = true
@@ -443,17 +443,16 @@ struct PDFViewerView: NSViewRepresentable {
             let w: CGFloat = 160
             let pageRect = page1.bounds(for: .mediaBox)
             let bounds = CGRect(x: pageRect.width - w - 10, y: pageRect.height - h - 10, width: w, height: h)
-            page1.addAnnotation(makeGradeAnnotation(text: newText, bounds: bounds, tag: summaryTag))
+            page1.addAnnotation(makeGradeAnnotation(text: newText, bounds: bounds, tag: summaryTag, alpha: 1.0))
             return true
         }
 
-        private func makeGradeAnnotation(text: String, bounds: CGRect, tag: String) -> PDFAnnotation {
+        private func makeGradeAnnotation(text: String, bounds: CGRect, tag: String, alpha: CGFloat = 0.5) -> PDFAnnotation {
             let ann = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
             ann.contents = text
             ann.font = NSFont.systemFont(ofSize: 10)
             ann.fontColor = NSColor(red: 0, green: 0.40, blue: 0.12, alpha: 1)  // dark green
-            // #FFFBB3 light yellow
-            ann.color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 1.0)
+            ann.color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: alpha)
             ann.userName = tag
             ann.isReadOnly = true
             let border = PDFBorder()
@@ -651,6 +650,7 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        let hadEditor = inlineEditorContainer != nil
         // Always claim focus — if an inline editor is open this causes it to resign and commit
         window?.makeFirstResponder(self)
         let loc = pageLocation(for: event)
@@ -689,7 +689,18 @@ final class AnnotatingPDFView: PDFView {
         case .highlight:
             super.mouseDown(with: event)
 
-        case .text, .stamp:
+        case .text:
+            guard let loc else { super.mouseDown(with: event); return }
+            // Single-click on an existing (non-readonly) text annotation → edit it
+            if let hit = loc.page.annotation(at: loc.point), !hit.isReadOnly, hit.font != nil {
+                editTextAnnotation(hit, on: loc.page)
+                return
+            }
+            // If this click just dismissed an inline editor, don't also create a new comment
+            if hadEditor { return }
+            annotationDelegate?.pdfView(self, didClickAt: loc.point, on: loc.page, tool: currentTool)
+
+        case .stamp:
             guard let loc else { super.mouseDown(with: event); return }
             annotationDelegate?.pdfView(self, didClickAt: loc.point, on: loc.page, tool: currentTool)
         }
