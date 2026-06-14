@@ -166,6 +166,7 @@ struct ImporterView: View {
                 for result in results {
                     let student = Student(name: result.name, email: result.email, fileName: result.fileName)
                     student.pdfRelativePath = result.relativePath
+                    context.insert(student)  // insert before appending scores so cascade tracks them
                     for id in rubricIDs {
                         student.scores.append(Score(rubricItemID: id))
                     }

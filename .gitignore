@@ -20,3 +20,4 @@ build/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+wishlist.md

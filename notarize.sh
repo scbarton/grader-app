@@ -3,6 +3,14 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 APP="$DIR/build/Release/Grader.app"
+
+echo "==> Building Release..."
+xcodebuild -project "$DIR/GraderApp.xcodeproj" \
+  -scheme GraderApp \
+  -configuration Release \
+  -derivedDataPath "$DIR/build/DerivedData" \
+  CONFIGURATION_BUILD_DIR="$DIR/build/Release" \
+  build
 ZIP="$DIR/build/Release/Grader.zip"
 SIGN_ID="Developer ID Application: Scott Calabrese Barton (WR7X27PQB5)"
 ENTITLEMENTS="$DIR/GraderApp/Resources/GraderApp.entitlements"
