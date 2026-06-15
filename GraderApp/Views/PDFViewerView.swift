@@ -221,7 +221,7 @@ struct PDFViewerView: NSViewRepresentable {
         private func showTextAnnotation(page: PDFPage, at point: CGPoint) {
             pdfView?.showInlineComment(at: point, on: page) { [weak self] text in
                 guard let self else { return }
-                let font = NSFont.systemFont(ofSize: 12)
+                let font = NSFont.systemFont(ofSize: 10)
                 let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
                 let measured = (text as NSString).boundingRect(
                     with: CGSize(width: 192, height: CGFloat.greatestFiniteMagnitude),
@@ -235,7 +235,7 @@ struct PDFViewerView: NSViewRepresentable {
                 annotation.contents = text
                 annotation.color = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.5)
                 annotation.fontColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
-                annotation.font = NSFont.systemFont(ofSize: 12)
+                annotation.font = NSFont.systemFont(ofSize: 10)
                 self.addAnnotationWithUndo(annotation, to: page)
             }
         }
@@ -273,6 +273,7 @@ struct PDFViewerView: NSViewRepresentable {
                     for ann in page.annotations where ann.userName == tag {
                         if ann.contents != newText {
                             ann.contents = newText
+                            ann.color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 0.5)
                             didUpdate = true
                         }
                     }
@@ -631,7 +632,7 @@ final class AnnotatingPDFView: PDFView {
         showInlineComment(at: pagePoint, on: page, initialText: annotation.contents ?? "",
         onCommit: { [weak self] text in
             guard let self else { return }
-            let font = NSFont.systemFont(ofSize: 12)
+            let font = NSFont.systemFont(ofSize: 10)
             let measured = (text as NSString).boundingRect(
                 with: CGSize(width: originalBounds.width - 8, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
