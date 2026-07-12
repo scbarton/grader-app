@@ -199,6 +199,12 @@ struct PDFViewerView: NSViewRepresentable {
             pdfView.clearSelection()
         }
 
+        func pdfViewDidDrawHighlight(bounds: CGRect, on page: PDFPage) {
+            let ann = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
+            ann.color = NSColor(calibratedRed: 1, green: 0.85, blue: 0, alpha: 1)
+            addAnnotationWithUndo(ann, to: page)
+        }
+
         func removeAnnotationWithUndo(_ annotation: PDFAnnotation) {
             guard let page = annotation.page else { return }
             page.removeAnnotation(annotation)
@@ -525,6 +531,7 @@ protocol AnnotationDelegate: AnyObject {
     func pdfViewDidModify(_ view: AnnotatingPDFView)
     func pdfViewDidRequestTool(_ tool: AnnotationTool)
     func pdfViewApplyHighlight(_ view: AnnotatingPDFView)
+    func pdfViewDidDrawHighlight(bounds: CGRect, on page: PDFPage)
     func pdfViewHandleGradeClick(at point: CGPoint, on page: PDFPage)
     func removeAnnotationWithUndo(_ annotation: PDFAnnotation)
     func handleGradeKey(_ event: NSEvent) -> Bool
@@ -571,6 +578,11 @@ final class AnnotatingPDFView: PDFView {
     private var draggingAnnotation: PDFAnnotation?
     private var dragStartPagePoint: CGPoint?
     private var dragOriginalOrigin: CGPoint?
+
+    // Drag state for highlight rectangle
+    private var highlightDragPage: PDFPage?
+    private var highlightDragStartPagePoint: CGPoint?
+    private var highlightRubberBand: NSView?
 
     // Inline comment editor overlay
     private var inlineEditorContainer: NSView?
@@ -688,7 +700,9 @@ final class AnnotatingPDFView: PDFView {
             }
 
         case .highlight:
-            super.mouseDown(with: event)
+            guard let loc else { return }
+            highlightDragPage = loc.page
+            highlightDragStartPagePoint = loc.point
 
         case .text:
             guard let loc else { super.mouseDown(with: event); return }
@@ -743,6 +757,30 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        // Highlight rubber-band drag
+        if let startPage = highlightDragPage, let startPt = highlightDragStartPagePoint {
+            let viewPt = convert(event.locationInWindow, from: nil)
+            let startViewPt = convert(startPt, from: startPage)
+            let rect = NSRect(
+                x: min(startViewPt.x, viewPt.x),
+                y: min(startViewPt.y, viewPt.y),
+                width: abs(viewPt.x - startViewPt.x),
+                height: abs(viewPt.y - startViewPt.y)
+            )
+            if let rb = highlightRubberBand {
+                rb.frame = rect
+            } else {
+                let rb = NSView(frame: rect)
+                rb.wantsLayer = true
+                rb.layer?.backgroundColor = NSColor(calibratedRed: 1, green: 0.85, blue: 0, alpha: 0.35).cgColor
+                rb.layer?.borderWidth = 1
+                rb.layer?.borderColor = NSColor(calibratedRed: 1, green: 0.75, blue: 0, alpha: 0.8).cgColor
+                addSubview(rb)
+                highlightRubberBand = rb
+            }
+            return
+        }
+
         guard let ann = draggingAnnotation,
               let page = ann.page,
               let startPt = dragStartPagePoint,
@@ -761,6 +799,25 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        // Commit highlight rectangle
+        if let startPage = highlightDragPage, let startPt = highlightDragStartPagePoint {
+            highlightRubberBand?.removeFromSuperview()
+            highlightRubberBand = nil
+            highlightDragPage = nil
+            highlightDragStartPagePoint = nil
+            let viewPt = convert(event.locationInWindow, from: nil)
+            let endPt = convert(viewPt, to: startPage)
+            let pageRect = CGRect(
+                x: min(startPt.x, endPt.x),
+                y: min(startPt.y, endPt.y),
+                width: abs(endPt.x - startPt.x),
+                height: abs(endPt.y - startPt.y)
+            )
+            guard pageRect.width > 4 && pageRect.height > 4 else { return }
+            annotationDelegate?.pdfViewDidDrawHighlight(bounds: pageRect, on: startPage)
+            return
+        }
+
         if draggingAnnotation != nil {
             draggingAnnotation = nil
             dragStartPagePoint = nil
@@ -768,9 +825,6 @@ final class AnnotatingPDFView: PDFView {
             annotationDelegate?.pdfViewDidModify(self)
         } else {
             super.mouseUp(with: event)
-            if currentTool == .highlight {
-                annotationDelegate?.pdfViewApplyHighlight(self)
-            }
         }
     }
 
@@ -810,7 +864,7 @@ final class AnnotatingPDFView: PDFView {
         switch ch {
         case "m": annotationDelegate?.pdfViewDidRequestTool(.pointer);            return
         case "c": annotationDelegate?.pdfViewDidRequestTool(.text);              return
-        case "h": annotationDelegate?.pdfViewApplyHighlight(self);               return
+        case "h": annotationDelegate?.pdfViewDidRequestTool(.highlight);          return
         case "d": annotationDelegate?.pdfViewDidRequestTool(.delete);            return
         case "g": annotationDelegate?.pdfViewDidRequestTool(.grade);             return
         case "r":

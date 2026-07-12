@@ -302,6 +302,7 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+				CONFIGURATION_BUILD_DIR = "$(PROJECT_DIR)/build/Release";
 			};
 			name = Release;
 		};
