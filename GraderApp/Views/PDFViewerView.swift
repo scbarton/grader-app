@@ -228,7 +228,7 @@ struct PDFViewerView: NSViewRepresentable {
         private func showTextAnnotation(page: PDFPage, at point: CGPoint) {
             pdfView?.showInlineComment(at: point, on: page) { [weak self] text in
                 guard let self else { return }
-                let font = NSFont.systemFont(ofSize: 10)
+                let font = NSFont(name: "Helvetica", size: 10) ?? NSFont.systemFont(ofSize: 10)
                 let rotated = page.rotation % 360 == 90 || page.rotation % 360 == 270
                 let measured = (text as NSString).boundingRect(
                     with: CGSize(width: 192, height: CGFloat.greatestFiniteMagnitude),
@@ -242,7 +242,7 @@ struct PDFViewerView: NSViewRepresentable {
                 annotation.contents = text
                 annotation.color = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.5)
                 annotation.fontColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
-                annotation.font = NSFont.systemFont(ofSize: 10)
+                annotation.font = NSFont(name: "Helvetica", size: 10) ?? NSFont.systemFont(ofSize: 10)
                 self.addAnnotationWithUndo(annotation, to: page)
             }
         }
@@ -252,7 +252,7 @@ struct PDFViewerView: NSViewRepresentable {
             let bounds = CGRect(x: point.x, y: point.y - size / 2, width: size, height: size)
             let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
             annotation.contents = type.symbol
-            annotation.font = NSFont.systemFont(ofSize: 12)
+            annotation.font = NSFont(name: "Helvetica", size: 12) ?? NSFont.systemFont(ofSize: 12)
             annotation.color = .clear
             annotation.alignment = .center
             annotation.userName = "grader.emoji"
@@ -300,25 +300,23 @@ struct PDFViewerView: NSViewRepresentable {
             savePDF()
         }
 
-        // On load: clear isReadOnly from all annotations (migrates files saved before this flag
-        // was removed) and re-apply alpha to grader grade/summary annotations (PDFKit bakes
-        // appearance streams without transparency when isReadOnly was set).
+        // On load: leave every annotation's appearance exactly as parsed from disk.
+        //
+        // We must NOT reassign .color/.contents here. Doing so marks the annotation dirty and
+        // forces PDFKit to regenerate its appearance stream on the next dataRepresentation();
+        // on this project's iPad-generated (transparency-group) PDFs that regeneration flattens
+        // the FreeText into the page content stream ("baking") — making comments/stamps opaque,
+        // immovable and undeletable. It also caused the visible flip where the opaque summary
+        // turned translucent (recolored to alpha 0.5) after switching away and back.
+        //
+        // Only migrate the legacy isReadOnly flag, and only when it is actually set, so clean
+        // annotations are never touched.
         func refreshAnnotationColors() {
             guard let doc = pdfView?.document else { return }
-            let yellowColor = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 0.5)
             for i in 0..<doc.pageCount {
                 guard let page = doc.page(at: i) else { continue }
-                for ann in page.annotations {
+                for ann in page.annotations where ann.isReadOnly {
                     ann.isReadOnly = false
-                    // Re-set color on every annotation to force PDFKit to regenerate the
-                    // appearance stream. Without this, annotations saved with isReadOnly=true
-                    // keep their baked opaque AP stream and appear solid after reload.
-                    if let name = ann.userName, name.hasPrefix("grader."), name != "grader.emoji" {
-                        ann.contents = ann.contents ?? ""
-                        ann.color = yellowColor
-                    } else {
-                        ann.color = ann.color
-                    }
                 }
             }
         }
@@ -491,7 +489,7 @@ struct PDFViewerView: NSViewRepresentable {
         private func makeGradeAnnotation(text: String, bounds: CGRect, tag: String, alpha: CGFloat = 0.5) -> PDFAnnotation {
             let ann = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
             ann.contents = text
-            ann.font = NSFont.systemFont(ofSize: 10)
+            ann.font = NSFont(name: "Helvetica", size: 10) ?? NSFont.systemFont(ofSize: 10)
             ann.fontColor = NSColor(red: 0, green: 0.40, blue: 0.12, alpha: 1)  // dark green
             ann.color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: alpha)
             ann.userName = tag
@@ -677,7 +675,7 @@ final class AnnotatingPDFView: PDFView {
         showInlineComment(at: pagePoint, on: page, initialText: annotation.contents ?? "",
         onCommit: { [weak self] text in
             guard let self else { return }
-            let font = NSFont.systemFont(ofSize: 10)
+            let font = NSFont(name: "Helvetica", size: 10) ?? NSFont.systemFont(ofSize: 10)
             let measured = (text as NSString).boundingRect(
                 with: CGSize(width: originalBounds.width - 8, height: .greatestFiniteMagnitude),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],

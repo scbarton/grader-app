@@ -107,6 +107,113 @@ enum PDFScaler {
         }
     }
 
+    /// Rewrites `url` in-place, rasterizing any page that contains "vector ink" (iPad
+    /// handwriting drawn through a transparency-group Form XObject) to a flat 300-DPI image.
+    ///
+    /// PDFKit flattens ("bakes") FreeText annotations into the page content stream when it
+    /// serializes a document whose pages contain this vector-ink layer — making grading
+    /// comments/stamps opaque, immovable and undeletable. Rasterizing the ink dissolves the
+    /// trigger (the page becomes a plain image, like a scanned submission, which never bakes)
+    /// while leaving the page visually identical. Scanned and typed PDFs carry no such layer
+    /// and are left completely untouched.
+    static let rasterDPI: CGFloat = 300
+
+    static func rasterizeInkIfNeeded(url: URL) {
+        guard let source = CGPDFDocument(url as CFURL) else { return }
+        let pagesToRasterize = (1...source.numberOfPages).filter { i in
+            source.page(at: i).map(pageHasTransparencyGroupForm) ?? false
+        }
+        guard !pagesToRasterize.isEmpty else { return }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("grader_raster_\(UUID().uuidString).pdf")
+        guard let ctx = CGContext(tempURL as CFURL, mediaBox: nil, nil) else { return }
+
+        let toRaster = Set(pagesToRasterize)
+        for i in 1...source.numberOfPages {
+            guard let page = source.page(at: i) else { continue }
+            var box = page.getBoxRect(.mediaBox)
+            ctx.beginPage(mediaBox: &box)
+            if toRaster.contains(i) {
+                drawPageRasterized(page, into: ctx, box: box, dpi: rasterDPI)
+            } else {
+                ctx.drawPDFPage(page)
+            }
+            ctx.endPage()
+        }
+        ctx.closePDF()
+
+        do {
+            try FileManager.default.removeItem(at: url)
+            try FileManager.default.moveItem(at: tempURL, to: url)
+        } catch {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+    }
+
+    /// Renders `page` to an offscreen bitmap at `dpi` and draws it into `ctx` filling `box`.
+    private static func drawPageRasterized(_ page: CGPDFPage, into ctx: CGContext, box: CGRect, dpi: CGFloat) {
+        let scale = dpi / 72.0
+        let pxW = Int((box.width * scale).rounded()), pxH = Int((box.height * scale).rounded())
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard pxW > 0, pxH > 0,
+              let bmp = CGContext(data: nil, width: pxW, height: pxH, bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+            ctx.drawPDFPage(page)  // fall back to a vector copy on failure
+            return
+        }
+        bmp.setFillColor(CGColor(gray: 1, alpha: 1))
+        bmp.fill(CGRect(x: 0, y: 0, width: pxW, height: pxH))
+        bmp.scaleBy(x: scale, y: scale)
+        if box.origin != .zero { bmp.translateBy(x: -box.origin.x, y: -box.origin.y) }
+        bmp.drawPDFPage(page)
+        guard let img = bmp.makeImage() else { ctx.drawPDFPage(page); return }
+        ctx.draw(img, in: box)
+    }
+
+    /// True if any XObject in the page's resources (recursively) is a Form with a
+    /// transparency group — the signature of iPad handwriting-ink layers.
+    private static func pageHasTransparencyGroupForm(_ page: CGPDFPage) -> Bool {
+        guard let dict = page.dictionary else { return false }
+        var resources: CGPDFDictionaryRef?
+        guard CGPDFDictionaryGetDictionary(dict, "Resources", &resources), let resources else { return false }
+        return dictionaryHasTransparencyGroupForm(resources, depth: 0)
+    }
+
+    private static func dictionaryHasTransparencyGroupForm(_ resources: CGPDFDictionaryRef, depth: Int) -> Bool {
+        guard depth < 6 else { return false }
+        var xobjects: CGPDFDictionaryRef?
+        guard CGPDFDictionaryGetDictionary(resources, "XObject", &xobjects), let xobjects else { return false }
+        var found = false
+        CGPDFDictionaryApplyBlock(xobjects, { _, value, _ in
+            var stream: CGPDFStreamRef?
+            guard CGPDFObjectGetValue(value, .stream, &stream), let stream,
+                  let sdict = CGPDFStreamGetDictionary(stream) else { return true }
+            var subtype: UnsafePointer<CChar>?
+            guard CGPDFDictionaryGetName(sdict, "Subtype", &subtype), let subtype,
+                  String(cString: subtype) == "Form" else { return true }
+            // Direct transparency group?
+            var group: CGPDFDictionaryRef?
+            if CGPDFDictionaryGetDictionary(sdict, "Group", &group), let group {
+                var s: UnsafePointer<CChar>?
+                if CGPDFDictionaryGetName(group, "S", &s), let s, String(cString: s) == "Transparency" {
+                    found = true
+                    return false  // stop iterating
+                }
+            }
+            // Otherwise recurse into the form's own resources
+            var fres: CGPDFDictionaryRef?
+            if CGPDFDictionaryGetDictionary(sdict, "Resources", &fres), let fres,
+               dictionaryHasTransparencyGroupForm(fres, depth: depth + 1) {
+                found = true
+                return false
+            }
+            return true
+        }, nil)
+        return found
+    }
+
     private static func pageNeedsScaling(_ doc: CGPDFDocument) -> Bool {
         let tol: CGFloat = 2
         for i in 1...doc.numberOfPages {
