@@ -300,23 +300,41 @@ struct PDFViewerView: NSViewRepresentable {
             savePDF()
         }
 
-        // On load: leave every annotation's appearance exactly as parsed from disk.
+        // On load: re-apply each FreeText annotation's intended background color, WITH its alpha.
         //
-        // We must NOT reassign .color/.contents here. Doing so marks the annotation dirty and
-        // forces PDFKit to regenerate its appearance stream on the next dataRepresentation();
-        // on this project's iPad-generated (transparency-group) PDFs that regeneration flattens
-        // the FreeText into the page content stream ("baking") — making comments/stamps opaque,
-        // immovable and undeletable. It also caused the visible flip where the opaque summary
-        // turned translucent (recolored to alpha 0.5) after switching away and back.
+        // A PDF annotation's color entry (/C) is RGB-only and cannot store alpha, so a translucent
+        // annotation reloads with an opaque color and PDFKit then regenerates an opaque appearance —
+        // comments/grade stamps lose their transparency and emoji gain a background after a round-trip.
+        // Re-assigning `ann.color = ann.color` does NOT help (it re-reads the already-opaque value);
+        // we must set the intended color with its alpha explicitly, keyed by annotation type.
         //
-        // Only migrate the legacy isReadOnly flag, and only when it is actually set, so clean
-        // annotations are never touched.
+        // This marks the annotation dirty (forcing appearance regeneration on the next save). That is
+        // safe from the "baking" bug because iPad handwriting-ink pages are rasterized at import
+        // (see PDFScaler.rasterizeInkIfNeeded) — regeneration only flattens into content on vector-ink
+        // pages, which no longer exist after import.
+        static let commentColor = NSColor(red: 0.95, green: 0.92, blue: 1.0, alpha: 0.5)
+        static let gradeColor   = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 0.5)
+        static let summaryColor = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 1.0)
+
         func refreshAnnotationColors() {
             guard let doc = pdfView?.document else { return }
             for i in 0..<doc.pageCount {
                 guard let page = doc.page(at: i) else { continue }
-                for ann in page.annotations where ann.isReadOnly {
-                    ann.isReadOnly = false
+                for ann in page.annotations {
+                    if ann.isReadOnly { ann.isReadOnly = false }
+                    // Only FreeText annotations (comments, grade stamps, summary, emoji) carry a
+                    // background color that loses alpha; highlights use a blend mode and are left alone.
+                    guard let t = ann.type, t.hasSuffix("FreeText") else { continue }
+                    switch ann.userName {
+                    case "grader.emoji":
+                        ann.color = .clear
+                    case "grader.summary":
+                        ann.color = Coordinator.summaryColor
+                    case let name? where name.hasPrefix("grader."):
+                        ann.color = Coordinator.gradeColor
+                    default:
+                        ann.color = Coordinator.commentColor
+                    }
                 }
             }
         }
@@ -469,9 +487,12 @@ struct PDFViewerView: NSViewRepresentable {
             lines.append("Total: \(fmtPts(totalEarned))/\(fmtPts(totalMax))\(pct)")
             let newText = lines.joined(separator: "\n")
 
-            let summaryTag = "grader.summary"
+            let summaryTag = AnnotatingPDFView.summaryTag
 
-            if let existing = page1.annotations.first(where: { $0.userName == summaryTag }) {
+            // Match either the opaque ("grader.summary") or toggled-translucent
+            // ("grader.summary.translucent") summary so we update in place, never duplicate,
+            // and preserve the user's chosen transparency.
+            if let existing = page1.annotations.first(where: { $0.userName?.hasPrefix(summaryTag) == true }) {
                 if existing.contents == newText { return false }
                 existing.contents = newText
                 return true
@@ -756,11 +777,27 @@ final class AnnotatingPDFView: PDFView {
     }
 
     // Right-click → Delete works regardless of current tool
+    // Summary transparency state is encoded in the userName (a PDF /T string that persists,
+    // unlike the background-color alpha which the PDF /C entry cannot store).
+    static let summaryTag = "grader.summary"
+    static let summaryTranslucentTag = "grader.summary.translucent"
+
     override func menu(for event: NSEvent) -> NSMenu? {
         if let loc = pageLocation(for: event),
            let annotation = loc.page.annotations.last(where: { $0.bounds.contains(loc.point) }) {
             selectAnnotation(annotation)
             let menu = NSMenu()
+
+            // Summaries get a transparency toggle
+            if let name = annotation.userName, name.hasPrefix(Self.summaryTag) {
+                let isTranslucent = (name == Self.summaryTranslucentTag)
+                let toggle = NSMenuItem(title: isTranslucent ? "Make Summary Opaque" : "Make Summary Transparent",
+                                        action: #selector(toggleSummaryTransparency), keyEquivalent: "")
+                toggle.target = self
+                menu.addItem(toggle)
+                menu.addItem(.separator())
+            }
+
             let item = NSMenuItem(title: "Delete Annotation",
                                   action: #selector(deleteSelected), keyEquivalent: "")
             item.target = self
@@ -768,6 +805,31 @@ final class AnnotatingPDFView: PDFView {
             return menu
         }
         return super.menu(for: event)
+    }
+
+    @objc private func toggleSummaryTransparency() {
+        guard let annotation = selectedAnnotation,
+              let name = annotation.userName, name.hasPrefix(Self.summaryTag) else { return }
+        setSummaryTransparency(annotation, translucent: name != Self.summaryTranslucentTag)
+    }
+
+    /// Applies a transparency state to a summary annotation, registers the inverse toggle for
+    /// undo/redo, and persists. State is stored in the userName so it survives save/reload.
+    private func setSummaryTransparency(_ annotation: PDFAnnotation, translucent: Bool) {
+        let yellow = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: translucent ? 0.5 : 1.0)
+        annotation.userName = translucent ? Self.summaryTranslucentTag : Self.summaryTag
+        if selectedAnnotation === annotation {
+            // Keep the restore-color in sync and drop the blue selection tint to reveal the change.
+            selectedOriginalColor = yellow
+            selectAnnotation(nil)
+        } else {
+            annotation.color = yellow
+        }
+        undoManager?.registerUndo(withTarget: self) { view in
+            view.setSummaryTransparency(annotation, translucent: !translucent)
+        }
+        undoManager?.setActionName("Toggle Summary Transparency")
+        annotationDelegate?.pdfViewDidModify(self)  // persist
     }
 
     @objc private func deleteSelected() {
