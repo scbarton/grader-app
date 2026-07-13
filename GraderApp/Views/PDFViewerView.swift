@@ -255,7 +255,7 @@ struct PDFViewerView: NSViewRepresentable {
             annotation.font = NSFont.systemFont(ofSize: 12)
             annotation.color = .clear
             annotation.alignment = .center
-            annotation.isReadOnly = true
+            annotation.userName = "grader.emoji"
             addAnnotationWithUndo(annotation, to: page)
         }
 
@@ -300,15 +300,18 @@ struct PDFViewerView: NSViewRepresentable {
             savePDF()
         }
 
-        // Re-apply alpha to grader annotations after loading from disk.
-        // PDFKit saves the appearance stream without transparency; touching contents+color
-        // forces it to regenerate the stream with the correct alpha on next render.
+        // On load: clear isReadOnly from all annotations (migrates files saved before this flag
+        // was removed) and re-apply alpha to grader grade/summary annotations (PDFKit bakes
+        // appearance streams without transparency when isReadOnly was set).
         func refreshAnnotationColors() {
             guard let doc = pdfView?.document else { return }
             let color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 0.5)
             for i in 0..<doc.pageCount {
                 guard let page = doc.page(at: i) else { continue }
-                for ann in page.annotations where ann.userName?.hasPrefix("grader.") == true {
+                for ann in page.annotations {
+                    ann.isReadOnly = false
+                    guard let name = ann.userName, name.hasPrefix("grader."),
+                          name != "grader.emoji" else { continue }
                     let text = ann.contents ?? ""
                     ann.contents = text
                     ann.color = color
@@ -488,7 +491,6 @@ struct PDFViewerView: NSViewRepresentable {
             ann.fontColor = NSColor(red: 0, green: 0.40, blue: 0.12, alpha: 1)  // dark green
             ann.color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: alpha)
             ann.userName = tag
-            ann.isReadOnly = true
             let border = PDFBorder()
             border.lineWidth = 0
             ann.border = border
@@ -700,7 +702,7 @@ final class AnnotatingPDFView: PDFView {
             let hit = loc.flatMap { $0.page.annotation(at: $0.point) }
             // Double-click on a user text annotation → edit it
             if event.clickCount == 2, let ann = hit, let hitLoc = loc,
-               !ann.isReadOnly, ann.font != nil {
+               ann.userName?.hasPrefix("grader.") != true, ann.font != nil {
                 selectAnnotation(nil)
                 editTextAnnotation(ann, on: hitLoc.page)
                 return
@@ -734,7 +736,8 @@ final class AnnotatingPDFView: PDFView {
         case .text:
             guard let loc else { super.mouseDown(with: event); return }
             // Single-click on an existing (non-readonly) text annotation → edit it
-            if let hit = loc.page.annotation(at: loc.point), !hit.isReadOnly, hit.font != nil {
+            if let hit = loc.page.annotations.last(where: { $0.bounds.contains(loc.point) }),
+               hit.userName?.hasPrefix("grader.") != true, hit.font != nil {
                 editTextAnnotation(hit, on: loc.page)
                 return
             }
