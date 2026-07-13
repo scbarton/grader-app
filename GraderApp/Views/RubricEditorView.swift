@@ -92,7 +92,7 @@ struct RubricEditorView: View {
         let order = (assignment.rubricItems.map(\.order).max() ?? -1) + 1
         assignment.rubricItems.append(RubricItem(name: newName, maxPoints: max, order: order))
         newName = ""
-        newMax = ""
+        newMax = "10"
     }
 }
 
