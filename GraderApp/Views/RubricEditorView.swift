@@ -8,6 +8,15 @@ struct RubricEditorView: View {
     @State private var newName = ""
     @State private var newMax = "10"
 
+    private var nextProblemName: String {
+        let nums = assignment.rubricItems.compactMap { item -> Int? in
+            let s = item.name.trimmingCharacters(in: .whitespaces)
+            guard s.count > 1, s.uppercased().hasPrefix("P"), let n = Int(s.dropFirst()) else { return nil }
+            return n
+        }
+        return "P\((nums.max() ?? 0) + 1)"
+    }
+
     private var sorted: [RubricItem] {
         assignment.rubricItems.sorted(by: { $0.order < $1.order })
     }
@@ -85,13 +94,14 @@ struct RubricEditorView: View {
             .padding()
         }
         .frame(width: 480, height: 520)
+        .onAppear { newName = nextProblemName }
     }
 
     private func addItem() {
         guard !newName.isEmpty, let max = Double(newMax) else { return }
         let order = (assignment.rubricItems.map(\.order).max() ?? -1) + 1
         assignment.rubricItems.append(RubricItem(name: newName, maxPoints: max, order: order))
-        newName = ""
+        newName = nextProblemName
         newMax = "10"
     }
 }
