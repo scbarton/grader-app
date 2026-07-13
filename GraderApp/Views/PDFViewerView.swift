@@ -132,13 +132,14 @@ struct PDFViewerView: NSViewRepresentable {
                     pdfView.autoScales = false
                     DispatchQueue.main.async {
                         context.coordinator.ensureQuizStamps()
+                        context.coordinator.refreshAnnotationColors()
                         context.coordinator.scrollToRelevantStamp()
                     }
                 }
             }
             DispatchQueue.main.async { pdfView.window?.makeFirstResponder(pdfView) }
-        } else if newSnapshot != context.coordinator.scoreSnapshot {
-            // Same student, scores changed: update stamps in the current document.
+        } else if newSnapshot.compactMapValues({ $0 }) != context.coordinator.scoreSnapshot.compactMapValues({ $0 }) {
+            // Same student, actual point values changed (ignore nil-score object creation).
             context.coordinator.scoreSnapshot = newSnapshot
             if context.coordinator.pdfView?.document != nil {
                 context.coordinator.refreshGradeAnnotations()
@@ -287,6 +288,32 @@ struct PDFViewerView: NSViewRepresentable {
             }
             if updateSummary() { didUpdate = true }
             if didUpdate { savePDF() }
+        }
+
+        func clearGraderAnnotations() {
+            guard let doc = pdfView?.document else { return }
+            for i in 0..<doc.pageCount {
+                guard let page = doc.page(at: i) else { continue }
+                let grader = page.annotations.filter { $0.userName?.hasPrefix("grader.") == true }
+                grader.forEach { page.removeAnnotation($0) }
+            }
+            savePDF()
+        }
+
+        // Re-apply alpha to grader annotations after loading from disk.
+        // PDFKit saves the appearance stream without transparency; touching contents+color
+        // forces it to regenerate the stream with the correct alpha on next render.
+        func refreshAnnotationColors() {
+            guard let doc = pdfView?.document else { return }
+            let color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 0.5)
+            for i in 0..<doc.pageCount {
+                guard let page = doc.page(at: i) else { continue }
+                for ann in page.annotations where ann.userName?.hasPrefix("grader.") == true {
+                    let text = ann.contents ?? ""
+                    ann.contents = text
+                    ann.color = color
+                }
+            }
         }
 
         // TODO: moving a quiz grade stamp with the pointer tool doesn't update the stored
@@ -689,7 +716,7 @@ final class AnnotatingPDFView: PDFView {
             }
 
         case .delete:
-            if let loc, let hit = loc.page.annotation(at: loc.point) {
+            if let loc, let hit = loc.page.annotations.last(where: { $0.bounds.standardized.insetBy(dx: -4, dy: -4).contains(loc.point) }) {
                 selectAnnotation(nil)
                 annotationDelegate?.removeAnnotationWithUndo(hit)
             }
@@ -724,7 +751,7 @@ final class AnnotatingPDFView: PDFView {
     // Right-click → Delete works regardless of current tool
     override func menu(for event: NSEvent) -> NSMenu? {
         if let loc = pageLocation(for: event),
-           let annotation = loc.page.annotation(at: loc.point) {
+           let annotation = loc.page.annotations.last(where: { $0.bounds.contains(loc.point) }) {
             selectAnnotation(annotation)
             let menu = NSMenu()
             let item = NSMenuItem(title: "Delete Annotation",
