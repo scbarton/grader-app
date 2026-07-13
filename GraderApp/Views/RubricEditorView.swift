@@ -7,6 +7,7 @@ struct RubricEditorView: View {
 
     @State private var newName = ""
     @State private var newMax = "10"
+    @FocusState private var nameFieldFocused: Bool
 
     private var nextProblemName: String {
         let nums = assignment.rubricItems.compactMap { item -> Int? in
@@ -63,6 +64,7 @@ struct RubricEditorView: View {
                 TextField("Problem name", text: $newName)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: .infinity)
+                    .focused($nameFieldFocused)
                 TextField("Pts", text: $newMax)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 60)
@@ -94,7 +96,7 @@ struct RubricEditorView: View {
             .padding()
         }
         .frame(width: 480, height: 520)
-        .onAppear { newName = nextProblemName }
+        .onAppear { newName = nextProblemName; nameFieldFocused = true }
     }
 
     private func addItem() {
@@ -103,6 +105,7 @@ struct RubricEditorView: View {
         assignment.rubricItems.append(RubricItem(name: newName, maxPoints: max, order: order))
         newName = nextProblemName
         newMax = "10"
+        nameFieldFocused = true
     }
 }
 
