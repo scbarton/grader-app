@@ -305,16 +305,20 @@ struct PDFViewerView: NSViewRepresentable {
         // appearance streams without transparency when isReadOnly was set).
         func refreshAnnotationColors() {
             guard let doc = pdfView?.document else { return }
-            let color = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 0.5)
+            let yellowColor = NSColor(red: 1.0, green: 251/255, blue: 179/255, alpha: 0.5)
             for i in 0..<doc.pageCount {
                 guard let page = doc.page(at: i) else { continue }
                 for ann in page.annotations {
                     ann.isReadOnly = false
-                    guard let name = ann.userName, name.hasPrefix("grader."),
-                          name != "grader.emoji" else { continue }
-                    let text = ann.contents ?? ""
-                    ann.contents = text
-                    ann.color = color
+                    // Re-set color on every annotation to force PDFKit to regenerate the
+                    // appearance stream. Without this, annotations saved with isReadOnly=true
+                    // keep their baked opaque AP stream and appear solid after reload.
+                    if let name = ann.userName, name.hasPrefix("grader."), name != "grader.emoji" {
+                        ann.contents = ann.contents ?? ""
+                        ann.color = yellowColor
+                    } else {
+                        ann.color = ann.color
+                    }
                 }
             }
         }
@@ -699,7 +703,9 @@ final class AnnotatingPDFView: PDFView {
 
         switch currentTool {
         case .pointer:
-            let hit = loc.flatMap { $0.page.annotation(at: $0.point) }
+            let hit = loc.flatMap { loc in
+                loc.page.annotations.last(where: { $0.bounds.standardized.insetBy(dx: -2, dy: -2).contains(loc.point) })
+            }
             // Double-click on a user text annotation → edit it
             if event.clickCount == 2, let ann = hit, let hitLoc = loc,
                ann.userName?.hasPrefix("grader.") != true, ann.font != nil {
@@ -848,10 +854,18 @@ final class AnnotatingPDFView: PDFView {
             return
         }
 
-        if draggingAnnotation != nil {
+        if let ann = draggingAnnotation, let page = ann.page {
+            let finalBounds = ann.bounds
+            // Commit the move: remove+re-add forces PDFKit to clear the old rendered
+            // position and draw at the new one. Without this, file-loaded annotations
+            // leave a ghost at their original position after a drag.
+            page.removeAnnotation(ann)
+            ann.bounds = finalBounds
+            page.addAnnotation(ann)
             draggingAnnotation = nil
             dragStartPagePoint = nil
             dragOriginalOrigin = nil
+            selectAnnotation(nil)
             annotationDelegate?.pdfViewDidModify(self)
         } else {
             super.mouseUp(with: event)

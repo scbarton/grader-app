@@ -149,6 +149,13 @@ private struct AssignmentSection: View {
                 StudentRow(student: student, rubricItems: assignment.rubricItems)
                     .tag(student)
                     .contextMenu {
+                        Button("Reveal in Finder") {
+                            guard !student.pdfRelativePath.isEmpty else { return }
+                            NSWorkspace.shared.activateFileViewerSelecting(
+                                [bundleURL.appendingPathComponent(student.pdfRelativePath)]
+                            )
+                        }
+                        .disabled(student.pdfRelativePath.isEmpty)
                         Button("Export PDF…") {
                             PDFExporter.exportSingle(student: student, assignment: assignment, bundleURL: bundleURL)
                         }

@@ -143,6 +143,7 @@
 				B1C2D3E4F5A6B7C8D9E0F1A2 /* Resources */,
 				412E829451121242804AADCB /* Sources */,
 				72B4A7AFE6234165C28B653D /* Frameworks */,
+				AA11BB22CC33DD44EE55FF66 /* Touch App Bundle */,
 			);
 			buildRules = (
 			);
@@ -222,6 +223,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA11BB22CC33DD44EE55FF66 /* Touch App Bundle */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Touch App Bundle";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "touch \"$BUILT_PRODUCTS_DIR/$WRAPPER_NAME\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		3C91E974ED8C172AA512F172 /* Release */ = {
