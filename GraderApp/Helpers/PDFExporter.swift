@@ -12,10 +12,6 @@ enum PDFExporter {
             alert.runModal()
             return
         }
-        let rubric = assignment.rubricItems.sorted { $0.order < $1.order }
-        if !rubric.isEmpty, let page = makeRubricPage(student: student, rubric: rubric, assignmentName: assignment.name) {
-            document.insert(page, at: document.pageCount)
-        }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = student.fileName
         panel.allowedContentTypes = [.pdf]
@@ -36,7 +32,6 @@ enum PDFExporter {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
-        let rubric = assignment.rubricItems.sorted { $0.order < $1.order }
         var exported = 0
         var failed: [String] = []
 
@@ -45,12 +40,6 @@ enum PDFExporter {
                   let document = PDFDocument(url: bundleURL.appendingPathComponent(student.pdfRelativePath)) else {
                 failed.append(student.name)
                 continue
-            }
-
-            if !rubric.isEmpty {
-                if let page = makeRubricPage(student: student, rubric: rubric, assignmentName: assignment.name) {
-                    document.insert(page, at: document.pageCount)
-                }
             }
 
             let dest = folder.appendingPathComponent(student.fileName)
