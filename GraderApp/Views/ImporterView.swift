@@ -156,12 +156,15 @@ struct ImporterView: View {
                 } catch {
                     continue
                 }
+                // Rasterize iPad handwriting-ink pages FIRST — this bakes annotation-based
+                // ink into a flat image (via PDFKit) before the CoreGraphics rotation/scale
+                // passes below, which render content streams only and would drop annotations.
+                // It also stops PDFKit baking grading annotations on save. No-op for
+                // scanned/typed PDFs.
+                PDFScaler.rasterizeInkIfNeeded(url: dest)
                 // Fix scanner rotation flags, then scale to letter size
                 PDFScaler.fixRotationIfNeeded(url: dest)
                 PDFScaler.scaleToLetterIfNeeded(url: dest)
-                // Rasterize iPad handwriting-ink pages so PDFKit can't bake grading
-                // annotations into the page content on save (no-op for scanned/typed PDFs)
-                PDFScaler.rasterizeInkIfNeeded(url: dest)
 
                 let relative = "PDFs/\(assignmentName)/\(file.url.lastPathComponent)"
                 results.append((file.name, file.email, file.url.lastPathComponent, relative))

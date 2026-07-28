@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import PDFKit
 
 enum PDFScaler {
     static let letterSize = CGSize(width: 612, height: 792) // 8.5 × 11 in at 72 dpi
@@ -107,21 +108,33 @@ enum PDFScaler {
         }
     }
 
-    /// Rewrites `url` in-place, rasterizing any page that contains "vector ink" (iPad
-    /// handwriting drawn through a transparency-group Form XObject) to a flat 300-DPI image.
+    /// Rewrites `url` in-place, rasterizing any page that contains iPad handwriting to a flat
+    /// 300-DPI image. Two forms of iPad ink are handled:
+    ///   • ink baked into the content stream via a transparency-group Form XObject, and
+    ///   • ink stored as live `/Ink` (or other) annotations on top of the page.
     ///
-    /// PDFKit flattens ("bakes") FreeText annotations into the page content stream when it
-    /// serializes a document whose pages contain this vector-ink layer — making grading
-    /// comments/stamps opaque, immovable and undeletable. Rasterizing the ink dissolves the
-    /// trigger (the page becomes a plain image, like a scanned submission, which never bakes)
-    /// while leaving the page visually identical. Scanned and typed PDFs carry no such layer
-    /// and are left completely untouched.
+    /// Both matter for two reasons. (1) PDFKit flattens ("bakes") our FreeText grading
+    /// annotations into the page content stream when it serializes a document containing a
+    /// vector-ink layer — making comments/stamps opaque, immovable and undeletable.
+    /// Rasterizing the ink dissolves that trigger (the page becomes a plain image, like a
+    /// scanned submission, which never bakes). (2) The rest of the import pipeline
+    /// (`scaleToLetterIfNeeded`, `fixRotationIfNeeded`) redraws pages through CoreGraphics'
+    /// `drawPDFPage`, which renders content streams only and silently drops annotations — so
+    /// annotation-based handwriting would vanish on import. Rendering here through PDFKit
+    /// (which *is* annotation-aware) bakes that ink into the image before those passes run.
+    ///
+    /// This pass must run FIRST in the pipeline (before scale/rotation) so annotation ink is
+    /// captured while it still exists. Scanned and typed PDFs carry no ink layer and are left
+    /// completely untouched.
     static let rasterDPI: CGFloat = 300
 
     static func rasterizeInkIfNeeded(url: URL) {
-        guard let source = CGPDFDocument(url as CFURL) else { return }
+        guard let source = CGPDFDocument(url as CFURL),
+              let pdfDoc = PDFDocument(url: url) else { return }
         let pagesToRasterize = (1...source.numberOfPages).filter { i in
-            source.page(at: i).map(pageHasTransparencyGroupForm) ?? false
+            let hasInkAnnotation = pdfDoc.page(at: i - 1).map(pageHasInkAnnotation) ?? false
+            let hasVectorInk = source.page(at: i).map(pageHasTransparencyGroupForm) ?? false
+            return hasInkAnnotation || hasVectorInk
         }
         guard !pagesToRasterize.isEmpty else { return }
 
@@ -134,8 +147,8 @@ enum PDFScaler {
             guard let page = source.page(at: i) else { continue }
             var box = page.getBoxRect(.mediaBox)
             ctx.beginPage(mediaBox: &box)
-            if toRaster.contains(i) {
-                drawPageRasterized(page, into: ctx, box: box, dpi: rasterDPI)
+            if toRaster.contains(i), let pdfPage = pdfDoc.page(at: i - 1) {
+                drawPageRasterized(pdfPage, cgPage: page, into: ctx, box: box, dpi: rasterDPI)
             } else {
                 ctx.drawPDFPage(page)
             }
@@ -151,8 +164,12 @@ enum PDFScaler {
         }
     }
 
-    /// Renders `page` to an offscreen bitmap at `dpi` and draws it into `ctx` filling `box`.
-    private static func drawPageRasterized(_ page: CGPDFPage, into ctx: CGContext, box: CGRect, dpi: CGFloat) {
+    /// Renders `pdfPage` (content + annotations) to an offscreen bitmap at `dpi` and draws it
+    /// into `ctx` filling `box`. Uses PDFKit's `draw(with:to:)` — unlike CoreGraphics'
+    /// `drawPDFPage`, it renders annotations (e.g. `/Ink` handwriting), baking them into the
+    /// flat image. Falls back to a CoreGraphics vector copy of `cgPage` if the bitmap can't be
+    /// created.
+    private static func drawPageRasterized(_ pdfPage: PDFPage, cgPage: CGPDFPage, into ctx: CGContext, box: CGRect, dpi: CGFloat) {
         let scale = dpi / 72.0
         let pxW = Int((box.width * scale).rounded()), pxH = Int((box.height * scale).rounded())
         let cs = CGColorSpaceCreateDeviceRGB()
@@ -160,16 +177,24 @@ enum PDFScaler {
               let bmp = CGContext(data: nil, width: pxW, height: pxH, bitsPerComponent: 8,
                                   bytesPerRow: 0, space: cs,
                                   bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
-            ctx.drawPDFPage(page)  // fall back to a vector copy on failure
+            ctx.drawPDFPage(cgPage)  // fall back to a vector copy on failure
             return
         }
         bmp.setFillColor(CGColor(gray: 1, alpha: 1))
         bmp.fill(CGRect(x: 0, y: 0, width: pxW, height: pxH))
+        bmp.saveGState()
         bmp.scaleBy(x: scale, y: scale)
         if box.origin != .zero { bmp.translateBy(x: -box.origin.x, y: -box.origin.y) }
-        bmp.drawPDFPage(page)
-        guard let img = bmp.makeImage() else { ctx.drawPDFPage(page); return }
+        pdfPage.draw(with: .mediaBox, to: bmp)  // annotation-aware (content + ink)
+        bmp.restoreGState()
+        guard let img = bmp.makeImage() else { ctx.drawPDFPage(cgPage); return }
         ctx.draw(img, in: box)
+    }
+
+    /// True if the page carries handwriting stored as annotations (Ink strokes, or the
+    /// pencil/marker variants some apps emit as Highlight/Square/FreeHand overlays).
+    private static func pageHasInkAnnotation(_ page: PDFPage) -> Bool {
+        page.annotations.contains { $0.type == "Ink" }
     }
 
     /// True if any XObject in the page's resources (recursively) is a Form with a
