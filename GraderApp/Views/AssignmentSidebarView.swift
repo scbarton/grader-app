@@ -1,6 +1,14 @@
 import SwiftUI
 import SwiftData
 
+/// Bundles the target assignment with any dropped file URLs so the importer sheet
+/// is presented from a single atomic value (no stale sibling-@State on drop).
+private struct ImportRequest: Identifiable {
+    let id = UUID()
+    let assignment: Assignment
+    let urls: [URL]
+}
+
 struct AssignmentSidebarView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Assignment.name) private var assignments: [Assignment]
@@ -14,9 +22,10 @@ struct AssignmentSidebarView: View {
     @State private var showingNewAssignment = false
     @State private var showingRoster = false
     @State private var expandedIDs: Set<UUID> = []
-    // Dedicated local state so assignment and sheet flag update in the same cycle
-    @State private var importerAssignment: Assignment?
-    @State private var importerInitialURLs: [URL] = []
+    // Single atomic value so the target assignment and its dropped URLs are always
+    // presented together — avoids the .sheet(item:) race where a sibling @State
+    // (the URL list) is read stale and the importer opens empty.
+    @State private var importRequest: ImportRequest?
     @State private var rubricAssignment: Assignment?
     @State private var d2lExportAssignment: Assignment?
 
@@ -32,8 +41,8 @@ struct AssignmentSidebarView: View {
                     ),
                     onRemoveStudent: { removeStudent($0, from: assignment) },
                     onEditRubric:   { rubricAssignment = assignment },
-                    onImport:       { importerInitialURLs = []; importerAssignment = assignment },
-                    onDropFiles:    { urls in importerInitialURLs = urls; importerAssignment = assignment },
+                    onImport:       { importRequest = ImportRequest(assignment: assignment, urls: []) },
+                    onDropFiles:    { urls in importRequest = ImportRequest(assignment: assignment, urls: urls) },
                     onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
                     onExportD2L:    {
                         if assignment.d2lColumnHeader.isEmpty {
@@ -87,16 +96,16 @@ struct AssignmentSidebarView: View {
                 )
             )
         }
-        .sheet(item: $importerAssignment) { assignment in
+        .sheet(item: $importRequest) { req in
             ImporterView(
-                assignment: assignment,
+                assignment: req.assignment,
                 isPresented: Binding(
-                    get: { importerAssignment != nil },
-                    set: { if !$0 { importerAssignment = nil } }
+                    get: { importRequest != nil },
+                    set: { if !$0 { importRequest = nil } }
                 ),
                 roster: roster,
                 bundleURL: bundleURL,
-                initialURLs: importerInitialURLs
+                initialURLs: req.urls
             )
         }
         .sheet(isPresented: $showingRoster) {

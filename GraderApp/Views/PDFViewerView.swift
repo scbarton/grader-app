@@ -964,23 +964,26 @@ final class AnnotatingPDFView: PDFView {
 
         let ch = event.charactersIgnoringModifiers?.lowercased()
 
-        // Annotation tool shortcuts (PDF view must have focus — won't fire in sidebar)
-        switch ch {
-        case "m": annotationDelegate?.pdfViewDidRequestTool(.pointer);            return
-        case "c": annotationDelegate?.pdfViewDidRequestTool(.text);              return
-        case "h": annotationDelegate?.pdfViewDidRequestTool(.highlight);          return
-        case "d": annotationDelegate?.pdfViewDidRequestTool(.delete);            return
-        case "g": annotationDelegate?.pdfViewDidRequestTool(.grade);             return
-        case "r":
-            if let page = currentPage {
-                page.rotation = (page.rotation + 90) % 360
-                annotationDelegate?.pdfViewDidModify(self)
+        // Annotation tool shortcuts (PDF view must have focus — won't fire in sidebar).
+        // Keys are user-configurable via Settings; resolve the bound action dynamically.
+        if (mods.isEmpty || mods == .shift), let ch,
+           let action = ShortcutSettings.shared.action(forKey: ch) {
+            switch action {
+            case .pointer:   annotationDelegate?.pdfViewDidRequestTool(.pointer)
+            case .comment:   annotationDelegate?.pdfViewDidRequestTool(.text)
+            case .highlight: annotationDelegate?.pdfViewDidRequestTool(.highlight)
+            case .delete:    annotationDelegate?.pdfViewDidRequestTool(.delete)
+            case .grade:     annotationDelegate?.pdfViewDidRequestTool(.grade)
+            case .rotate:
+                if let page = currentPage {
+                    page.rotation = (page.rotation + 90) % 360
+                    annotationDelegate?.pdfViewDidModify(self)
+                }
+            case .correct:   annotationDelegate?.pdfViewDidRequestTool(.stamp(.correct))
+            case .incorrect: annotationDelegate?.pdfViewDidRequestTool(.stamp(.incorrect))
+            case .partial:   annotationDelegate?.pdfViewDidRequestTool(.stamp(.partial))
             }
             return
-        case "v": annotationDelegate?.pdfViewDidRequestTool(.stamp(.correct));   return
-        case "x": annotationDelegate?.pdfViewDidRequestTool(.stamp(.incorrect)); return
-        case "k": annotationDelegate?.pdfViewDidRequestTool(.stamp(.partial));   return
-        default: break
         }
 
         // ⌫ / Forward-delete removes the currently selected annotation

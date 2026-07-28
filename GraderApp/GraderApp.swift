@@ -73,6 +73,10 @@ struct GraderApp: App {
                 }
             }
         }
+
+        Settings {
+            ShortcutSettingsView()
+        }
     }
 }
 
