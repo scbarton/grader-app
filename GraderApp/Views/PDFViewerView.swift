@@ -594,11 +594,14 @@ struct PDFViewerView: NSViewRepresentable {
             guard let url = currentURL, let doc = pdfView?.document else { return }
             // Temporarily restore the selected annotation's real color before serializing
             // so the blue selection tint is never baked into the saved PDF
+            // Only the blue pointer-selection tint must be stripped before serializing; a
+            // handle-selected comment keeps its real color (selectionTinted == false).
+            let tinted = pdfView?.selectionTinted ?? false
             let sel = pdfView?.selectedAnnotation
             let orig = pdfView?.selectedOriginalColor
-            if let sel, let orig { sel.color = orig }
+            if tinted, let sel, let orig { sel.color = orig }
             let data = doc.dataRepresentation()
-            if let sel { sel.color = NSColor.systemBlue.withAlphaComponent(0.25) }
+            if tinted, let sel { sel.color = NSColor.systemBlue.withAlphaComponent(0.25) }
             if let data { try? data.write(to: url, options: .atomic) }
         }
     }
@@ -642,6 +645,77 @@ private final class InkOverlayView: NSView {
         path.lineJoinStyle = .round
         strokeColor.setStroke()
         path.stroke()
+    }
+}
+
+// MARK: - Comment selection handles overlay
+
+/// The four resize corners of a selected comment box. Corners are indexed to match
+/// `CommentSelectionView.handleRects(for:)` so a hit index maps straight to a corner.
+private enum HandleCorner: Int {
+    case bottomLeft, bottomRight, topLeft, topRight
+
+    var opposite: HandleCorner {
+        switch self {
+        case .bottomLeft:  .topRight
+        case .bottomRight: .topLeft
+        case .topLeft:     .bottomRight
+        case .topRight:    .bottomLeft
+        }
+    }
+
+    func point(in rect: CGRect) -> CGPoint {
+        let r = rect.standardized
+        switch self {
+        case .bottomLeft:  return CGPoint(x: r.minX, y: r.minY)
+        case .bottomRight: return CGPoint(x: r.maxX, y: r.minY)
+        case .topLeft:     return CGPoint(x: r.minX, y: r.maxY)
+        case .topRight:    return CGPoint(x: r.maxX, y: r.maxY)
+        }
+    }
+}
+
+/// Transparent, non-interactive subview that draws a selected comment's bounding box and its
+/// four corner resize handles, in the PDFView's (unflipped) view coordinate space. Like
+/// `InkOverlayView`, it never intercepts mouse events — the parent view owns hit-testing.
+private final class CommentSelectionView: NSView {
+    var boxRect: CGRect = .zero { didSet { needsDisplay = true } }
+
+    static let handleSize: CGFloat = 9
+    static let strokeColor = NSColor(red: 0.55, green: 0.15, blue: 0.75, alpha: 0.9)  // violet
+
+    override var isFlipped: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }  // parent owns hit-testing
+
+    /// Corner handle rects (view space), indexed to match `HandleCorner`.
+    static func handleRects(for box: CGRect) -> [CGRect] {
+        let s = handleSize
+        let b = box.standardized
+        let centers = [
+            CGPoint(x: b.minX, y: b.minY),  // bottomLeft
+            CGPoint(x: b.maxX, y: b.minY),  // bottomRight
+            CGPoint(x: b.minX, y: b.maxY),  // topLeft
+            CGPoint(x: b.maxX, y: b.maxY),  // topRight
+        ]
+        return centers.map { CGRect(x: $0.x - s / 2, y: $0.y - s / 2, width: s, height: s) }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard boxRect.width > 0, boxRect.height > 0 else { return }
+        Self.strokeColor.setStroke()
+
+        let border = NSBezierPath(rect: boxRect.standardized)
+        border.lineWidth = 1
+        border.setLineDash([4, 3], count: 2, phase: 0)
+        border.stroke()
+
+        for r in Self.handleRects(for: boxRect) {
+            let hp = NSBezierPath(rect: r)
+            NSColor.white.setFill()
+            hp.fill()
+            hp.lineWidth = 1
+            hp.stroke()
+        }
     }
 }
 
@@ -699,6 +773,19 @@ final class AnnotatingPDFView: PDFView {
 
     // Inline comment editor overlay
     private var inlineEditorContainer: NSView?
+
+    // Comment selection (Comment tool): a selected comment shows corner handles and can be
+    // moved/resized. `selectionTinted` distinguishes the blue pointer-selection (which savePDF
+    // must un-tint before serializing) from the handle-selection (real color, never tinted).
+    var commentSelection: PDFAnnotation?
+    var selectionTinted = false
+    private var commentSelectionPage: PDFPage?
+    private var commentHandles: NSView?
+    private var resizingAnnotation: PDFAnnotation?
+    private var resizeAnchorPagePoint: CGPoint = .zero
+    private var resizeOriginalBounds: CGRect = .zero
+    private var clipObserver: Any?
+    private var scaleObserver: Any?
 
     func showInlineComment(at pagePoint: CGPoint, on page: PDFPage, initialText: String = "", onCommit: @escaping (String) -> Void, onCancel: (() -> Void)? = nil) {
         inlineEditorContainer?.removeFromSuperview()
@@ -827,10 +914,34 @@ final class AnnotatingPDFView: PDFView {
 
         case .text:
             guard let loc else { super.mouseDown(with: event); return }
-            // Single-click on an existing (non-readonly) text annotation → edit it
-            if let hit = loc.page.annotations.last(where: { $0.bounds.contains(loc.point) }),
-               hit.userName?.hasPrefix("grader.") != true, hit.font != nil {
-                editTextAnnotation(hit, on: loc.page)
+            let viewPoint = convert(event.locationInWindow, from: nil)
+
+            // 1. A corner handle of the selected comment → begin resize (opposite corner anchors)
+            if let sel = commentSelection, let corner = handleCorner(at: viewPoint) {
+                resizeAnchorPagePoint = corner.opposite.point(in: sel.bounds)
+                resizeOriginalBounds = sel.bounds
+                resizingAnnotation = sel
+                return
+            }
+
+            // 2. An existing comment under the click
+            if let hit = loc.page.annotations.last(where: { isEditableComment($0) && $0.bounds.contains(loc.point) }) {
+                if event.clickCount == 2 {
+                    selectAnnotation(nil)
+                    editTextAnnotation(hit, on: loc.page)  // double-click → edit
+                    return
+                }
+                // Single-click → select (show handles) and begin move
+                selectAnnotation(hit, handles: true)
+                draggingAnnotation = hit
+                dragStartPagePoint = loc.point
+                dragOriginalOrigin = hit.bounds.origin
+                return
+            }
+
+            // 3. Empty area: deselect if something is selected, otherwise create a new comment
+            if commentSelection != nil {
+                selectAnnotation(nil)
                 return
             }
             // If this click just dismissed an inline editor, don't also create a new comment
@@ -905,18 +1016,89 @@ final class AnnotatingPDFView: PDFView {
         annotationDelegate?.removeAnnotationWithUndo(annotation)
     }
 
-    func selectAnnotation(_ annotation: PDFAnnotation?) {
+    /// Selects `annotation`. With `handles: false` (pointer / right-click) the annotation is
+    /// tinted blue. With `handles: true` (Comment tool) the real color is kept and four corner
+    /// resize handles are shown instead. Passing nil clears any selection and the handles.
+    func selectAnnotation(_ annotation: PDFAnnotation?, handles: Bool = false) {
         // Restore previous selection's original color
         if let prev = selectedAnnotation, let orig = selectedOriginalColor {
             prev.color = orig
         }
         selectedAnnotation = annotation
         selectedOriginalColor = annotation?.color
+        selectionTinted = false
 
-        if let annotation {
-            // Blue tint to signal selection; semi-transparent so content stays readable
-            annotation.color = NSColor.systemBlue.withAlphaComponent(0.25)
+        if let annotation, handles {
+            commentSelection = annotation
+            commentSelectionPage = annotation.page
+            showCommentHandles()
+            positionCommentHandles()
+        } else {
+            commentSelection = nil
+            commentSelectionPage = nil
+            hideCommentHandles()
+            if let annotation {
+                // Blue tint to signal selection; semi-transparent so content stays readable
+                annotation.color = NSColor.systemBlue.withAlphaComponent(0.25)
+                selectionTinted = true
+            }
         }
+    }
+
+    // MARK: - Comment selection handles
+
+    private func isEditableComment(_ ann: PDFAnnotation) -> Bool {
+        guard let t = ann.type, t.hasSuffix("FreeText") else { return false }
+        return ann.userName?.hasPrefix("grader.") != true && ann.font != nil
+    }
+
+    private func showCommentHandles() {
+        if commentHandles == nil {
+            let ov = CommentSelectionView(frame: bounds)
+            ov.autoresizingMask = [.width, .height]
+            addSubview(ov)
+            commentHandles = ov
+        }
+    }
+
+    private func hideCommentHandles() {
+        commentHandles?.removeFromSuperview()
+        commentHandles = nil
+    }
+
+    /// Reposition the handles overlay from the comment's current page-space bounds. Called on
+    /// select, during move/resize, and on scroll/zoom so the handles stay glued to the box.
+    func positionCommentHandles() {
+        guard let ov = commentHandles as? CommentSelectionView,
+              let ann = commentSelection, let page = commentSelectionPage else { return }
+        ov.boxRect = convert(ann.bounds, from: page)
+    }
+
+    /// The resize corner under a view-space point, if a comment is selected.
+    private func handleCorner(at viewPoint: CGPoint) -> HandleCorner? {
+        guard let ov = commentHandles as? CommentSelectionView, commentSelection != nil else { return nil }
+        for (i, r) in CommentSelectionView.handleRects(for: ov.boxRect).enumerated() where r.contains(viewPoint) {
+            return HandleCorner(rawValue: i)
+        }
+        return nil
+    }
+
+    /// Registers a reversible bounds change (move/resize) for undo/redo.
+    private func registerBoundsUndo(_ ann: PDFAnnotation, old: CGRect, name: String) {
+        undoManager?.registerUndo(withTarget: self) { view in
+            let current = ann.bounds
+            if let page = ann.page {
+                page.removeAnnotation(ann)
+                ann.bounds = old
+                page.addAnnotation(ann)
+            } else {
+                ann.bounds = old
+            }
+            view.registerBoundsUndo(ann, old: current, name: name)  // redo
+            if view.commentSelection === ann { view.positionCommentHandles() }
+            view.annotationDelegate?.pdfViewDidModify(view)
+        }
+        undoManager?.setActionName(name)
     }
 
     // MARK: - Freehand ink preview overlay
@@ -943,6 +1125,20 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        // Comment resize drag — span a rect between the fixed anchor corner and the cursor
+        if let ann = resizingAnnotation, let page = commentSelectionPage {
+            let viewPoint = convert(event.locationInWindow, from: nil)
+            var p = convert(viewPoint, to: page)
+            let a = resizeAnchorPagePoint
+            let minW: CGFloat = 40, minH: CGFloat = 16  // ~1.2em at the 10pt comment font
+            if abs(p.x - a.x) < minW { p.x = a.x + (p.x >= a.x ? minW : -minW) }
+            if abs(p.y - a.y) < minH { p.y = a.y + (p.y >= a.y ? minH : -minH) }
+            ann.bounds = CGRect(x: min(a.x, p.x), y: min(a.y, p.y),
+                                width: abs(p.x - a.x), height: abs(p.y - a.y))
+            positionCommentHandles()
+            return
+        }
+
         // Freehand ink drag — accumulate page-space points and refresh the live preview
         if let page = inkDragPage {
             let viewPt = convert(event.locationInWindow, from: nil)
@@ -990,6 +1186,7 @@ final class AnnotatingPDFView: PDFView {
             origin: CGPoint(x: origOrigin.x + dx, y: origOrigin.y + dy),
             size: ann.bounds.size
         )
+        if ann === commentSelection { positionCommentHandles() }
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -1024,8 +1221,26 @@ final class AnnotatingPDFView: PDFView {
             return
         }
 
+        // Commit comment resize
+        if let ann = resizingAnnotation, let page = ann.page {
+            let finalBounds = ann.bounds
+            let oldBounds = resizeOriginalBounds
+            page.removeAnnotation(ann)
+            ann.bounds = finalBounds
+            page.addAnnotation(ann)
+            resizingAnnotation = nil
+            if oldBounds != finalBounds {
+                registerBoundsUndo(ann, old: oldBounds, name: "Resize Comment")
+            }
+            selectAnnotation(ann, handles: true)  // keep selection + handles
+            annotationDelegate?.pdfViewDidModify(self)
+            return
+        }
+
         if let ann = draggingAnnotation, let page = ann.page {
             let finalBounds = ann.bounds
+            let wasComment = (ann === commentSelection)
+            let origin = dragOriginalOrigin
             // Commit the move: remove+re-add forces PDFKit to clear the old rendered
             // position and draw at the new one. Without this, file-loaded annotations
             // leave a ghost at their original position after a drag.
@@ -1035,7 +1250,15 @@ final class AnnotatingPDFView: PDFView {
             draggingAnnotation = nil
             dragStartPagePoint = nil
             dragOriginalOrigin = nil
-            selectAnnotation(nil)
+            if wasComment {
+                if let origin, origin != finalBounds.origin {
+                    registerBoundsUndo(ann, old: CGRect(origin: origin, size: finalBounds.size),
+                                       name: "Move Comment")
+                }
+                selectAnnotation(ann, handles: true)  // keep selection + handles
+            } else {
+                selectAnnotation(nil)
+            }
             annotationDelegate?.pdfViewDidModify(self)
         } else {
             super.mouseUp(with: event)
@@ -1097,6 +1320,12 @@ final class AnnotatingPDFView: PDFView {
             return
         }
 
+        // Escape clears a comment selection (and its handles)
+        if event.keyCode == 53, commentSelection != nil {
+            selectAnnotation(nil)
+            return
+        }
+
         // ⌫ / Forward-delete removes the currently selected annotation
         if event.keyCode == 51 || event.keyCode == 117 {
             if let annotation = selectedAnnotation {
@@ -1110,6 +1339,28 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override var acceptsFirstResponder: Bool { true }
+
+    // Keep the comment handles glued to the box as the content scrolls or the zoom changes.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if clipObserver == nil,
+           let clip = subviews.compactMap({ $0 as? NSScrollView }).first?.contentView {
+            clip.postsBoundsChangedNotifications = true
+            clipObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
+            ) { [weak self] _ in self?.positionCommentHandles() }
+        }
+        if scaleObserver == nil {
+            scaleObserver = NotificationCenter.default.addObserver(
+                forName: Notification.Name.PDFViewScaleChanged, object: self, queue: .main
+            ) { [weak self] _ in self?.positionCommentHandles() }
+        }
+    }
+
+    deinit {
+        if let o = clipObserver  { NotificationCenter.default.removeObserver(o) }
+        if let o = scaleObserver { NotificationCenter.default.removeObserver(o) }
+    }
 
     private func pageLocation(for event: NSEvent) -> (page: PDFPage, point: CGPoint)? {
         let viewPoint = convert(event.locationInWindow, from: nil)
