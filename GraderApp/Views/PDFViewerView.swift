@@ -13,6 +13,7 @@ enum AnnotationTool: Equatable, Hashable {
     case pointer
     case text
     case highlight
+    case ink
     case delete
     case grade
     case stamp(StampType)
@@ -203,6 +204,34 @@ struct PDFViewerView: NSViewRepresentable {
         func pdfViewDidDrawHighlight(bounds: CGRect, on page: PDFPage) {
             let ann = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
             ann.color = NSColor(calibratedRed: 1, green: 0.85, blue: 0, alpha: 1)
+            addAnnotationWithUndo(ann, to: page)
+        }
+
+        // Freehand handwriting (Z). `points` are in page coordinates. Stored as a PDF /Ink
+        // annotation: bounds = padded stroke bbox, path added relative to bounds origin.
+        static let inkColor = NSColor(red: 0.55, green: 0.15, blue: 0.75, alpha: 1)  // violet
+        static let inkLineWidth: CGFloat = 1.5
+
+        func pdfViewDidDrawInk(points: [CGPoint], on page: PDFPage) {
+            guard points.count >= 2 else { return }
+            let path = NSBezierPath()
+            path.move(to: points[0])
+            for pt in points.dropFirst() { path.line(to: pt) }
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            path.lineWidth = Self.inkLineWidth
+
+            let pad = Self.inkLineWidth + 2
+            let bbox = path.bounds.insetBy(dx: -pad, dy: -pad)
+            let ann = PDFAnnotation(bounds: bbox, forType: .ink, withProperties: nil)
+            ann.color = Self.inkColor
+            let border = PDFBorder()
+            border.lineWidth = Self.inkLineWidth
+            ann.border = border
+            // PDFKit interprets the added path relative to the annotation's bounds origin.
+            let local = path.copy() as! NSBezierPath
+            local.transform(using: AffineTransform(translationByX: -bbox.origin.x, byY: -bbox.origin.y))
+            ann.add(local)
             addAnnotationWithUndo(ann, to: page)
         }
 
@@ -584,9 +613,36 @@ protocol AnnotationDelegate: AnyObject {
     func pdfViewDidRequestTool(_ tool: AnnotationTool)
     func pdfViewApplyHighlight(_ view: AnnotatingPDFView)
     func pdfViewDidDrawHighlight(bounds: CGRect, on page: PDFPage)
+    func pdfViewDidDrawInk(points: [CGPoint], on page: PDFPage)
     func pdfViewHandleGradeClick(at point: CGPoint, on page: PDFPage)
     func removeAnnotationWithUndo(_ annotation: PDFAnnotation)
     func handleGradeKey(_ event: NSEvent) -> Bool
+}
+
+// MARK: - Freehand ink live-preview overlay
+
+/// Transparent, non-interactive subview that draws the in-progress handwriting stroke in view
+/// coordinates while the mouse is down. Not layer-backed, so it shares the PDFView's unflipped
+/// coordinate space (no vertical flip to correct).
+private final class InkOverlayView: NSView {
+    var points: [CGPoint] = [] { didSet { needsDisplay = true } }
+    var strokeColor: NSColor = .systemRed
+    var lineWidth: CGFloat = 1.5
+
+    override var isFlipped: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }  // never intercept the drag
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard points.count >= 2 else { return }
+        let path = NSBezierPath()
+        path.move(to: points[0])
+        for p in points.dropFirst() { path.line(to: p) }
+        path.lineWidth = lineWidth
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        strokeColor.setStroke()
+        path.stroke()
+    }
 }
 
 // MARK: - Inline comment editor (NSTextView that commits on resign or Escape)
@@ -635,6 +691,11 @@ final class AnnotatingPDFView: PDFView {
     private var highlightDragPage: PDFPage?
     private var highlightDragStartPagePoint: CGPoint?
     private var highlightRubberBand: NSView?
+
+    // Drag state for freehand handwriting (ink)
+    private var inkDragPage: PDFPage?
+    private var inkPoints: [CGPoint] = []          // page coordinates
+    private var inkOverlay: NSView?                // live stroke preview
 
     // Inline comment editor overlay
     private var inlineEditorContainer: NSView?
@@ -758,6 +819,12 @@ final class AnnotatingPDFView: PDFView {
             highlightDragPage = loc.page
             highlightDragStartPagePoint = loc.point
 
+        case .ink:
+            guard let loc else { return }
+            inkDragPage = loc.page
+            inkPoints = [loc.point]
+            beginInkOverlay()
+
         case .text:
             guard let loc else { super.mouseDown(with: event); return }
             // Single-click on an existing (non-readonly) text annotation → edit it
@@ -852,7 +919,38 @@ final class AnnotatingPDFView: PDFView {
         }
     }
 
+    // MARK: - Freehand ink preview overlay
+
+    private func beginInkOverlay() {
+        endInkOverlay()
+        let ov = InkOverlayView(frame: bounds)
+        ov.autoresizingMask = [.width, .height]
+        ov.strokeColor = PDFViewerView.Coordinator.inkColor
+        ov.lineWidth = PDFViewerView.Coordinator.inkLineWidth * scaleFactor
+        addSubview(ov)
+        inkOverlay = ov
+    }
+
+    private func updateInkOverlay() {
+        guard let ov = inkOverlay as? InkOverlayView, let page = inkDragPage else { return }
+        ov.lineWidth = PDFViewerView.Coordinator.inkLineWidth * scaleFactor
+        ov.points = inkPoints.map { convert($0, from: page) }
+    }
+
+    private func endInkOverlay() {
+        inkOverlay?.removeFromSuperview()
+        inkOverlay = nil
+    }
+
     override func mouseDragged(with event: NSEvent) {
+        // Freehand ink drag — accumulate page-space points and refresh the live preview
+        if let page = inkDragPage {
+            let viewPt = convert(event.locationInWindow, from: nil)
+            inkPoints.append(convert(viewPt, to: page))
+            updateInkOverlay()
+            return
+        }
+
         // Highlight rubber-band drag
         if let startPage = highlightDragPage, let startPt = highlightDragStartPagePoint {
             let viewPt = convert(event.locationInWindow, from: nil)
@@ -895,6 +993,18 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        // Commit freehand ink stroke
+        if let page = inkDragPage {
+            let viewPt = convert(event.locationInWindow, from: nil)
+            inkPoints.append(convert(viewPt, to: page))
+            let points = inkPoints
+            endInkOverlay()
+            inkDragPage = nil
+            inkPoints = []
+            annotationDelegate?.pdfViewDidDrawInk(points: points, on: page)
+            return
+        }
+
         // Commit highlight rectangle
         if let startPage = highlightDragPage, let startPt = highlightDragStartPagePoint {
             highlightRubberBand?.removeFromSuperview()
@@ -972,6 +1082,7 @@ final class AnnotatingPDFView: PDFView {
             case .pointer:   annotationDelegate?.pdfViewDidRequestTool(.pointer)
             case .comment:   annotationDelegate?.pdfViewDidRequestTool(.text)
             case .highlight: annotationDelegate?.pdfViewDidRequestTool(.highlight)
+            case .handwriting: annotationDelegate?.pdfViewDidRequestTool(.ink)
             case .delete:    annotationDelegate?.pdfViewDidRequestTool(.delete)
             case .grade:     annotationDelegate?.pdfViewDidRequestTool(.grade)
             case .rotate:

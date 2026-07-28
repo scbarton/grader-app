@@ -5,16 +5,17 @@ import Observation
 /// pressed while the PDF view has focus. Grade-entry digits and Cmd+arrow navigation
 /// are intentionally not part of this set (they stay fixed).
 enum ShortcutAction: String, CaseIterable, Identifiable {
-    case pointer, comment, highlight, delete, grade, rotate, correct, incorrect, partial
+    case pointer, comment, highlight, handwriting, delete, grade, rotate, correct, incorrect, partial
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .pointer:   "Pointer / Move"
-        case .comment:   "Comment"
-        case .highlight: "Highlight"
-        case .delete:    "Delete"
+        case .pointer:     "Pointer / Move"
+        case .comment:     "Comment"
+        case .highlight:   "Highlight"
+        case .handwriting: "Handwriting"
+        case .delete:      "Delete"
         case .grade:     "Grade Stamp"
         case .rotate:    "Rotate Page"
         case .correct:   "Correct"
@@ -35,15 +36,16 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
 
     var defaultKey: String {
         switch self {
-        case .pointer:   "m"
-        case .comment:   "c"
-        case .highlight: "h"
-        case .delete:    "d"
-        case .grade:     "g"
-        case .rotate:    "r"
-        case .correct:   "v"
-        case .incorrect: "x"
-        case .partial:   "k"
+        case .pointer:     "m"
+        case .comment:     "c"
+        case .highlight:   "h"
+        case .handwriting: "z"
+        case .delete:      "d"
+        case .grade:       "g"
+        case .rotate:      "r"
+        case .correct:     "v"
+        case .incorrect:   "x"
+        case .partial:     "k"
         }
     }
 }

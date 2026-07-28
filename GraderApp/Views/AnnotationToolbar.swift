@@ -34,6 +34,11 @@ struct AnnotationToolbar: ToolbarContent {
             }
             .help("Highlight text · select tool, drag to select text · shortcut: H")
 
+            ToolButton(label: "Handwriting", icon: "pencil.and.scribble", active: tool == .ink) {
+                tool = .ink
+            }
+            .help("Handwriting · select tool, drag to draw freehand ink · shortcut: Z")
+
             Divider()
 
             ForEach(AnnotationTool.StampType.allCases, id: \.self) { stampType in
