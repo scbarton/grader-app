@@ -787,12 +787,18 @@ final class AnnotatingPDFView: PDFView {
     private var clipObserver: Any?
     private var scaleObserver: Any?
 
-    func showInlineComment(at pagePoint: CGPoint, on page: PDFPage, initialText: String = "", onCommit: @escaping (String) -> Void, onCancel: (() -> Void)? = nil) {
+    // Anchor for the inline editor overlay, so it can be re-positioned as the page scrolls or zooms.
+    private var inlineEditorPagePoint: CGPoint?
+    private weak var inlineEditorPage: PDFPage?
+
+    func showInlineComment(at pagePoint: CGPoint, on page: PDFPage, initialText: String = "", size: CGSize = CGSize(width: 200, height: 90), onCommit: @escaping (String) -> Void, onCancel: (() -> Void)? = nil) {
         inlineEditorContainer?.removeFromSuperview()
         inlineEditorContainer = nil
+        inlineEditorPagePoint = pagePoint
+        inlineEditorPage = page
 
         let viewPt = convert(pagePoint, from: page)
-        let w: CGFloat = 200, h: CGFloat = 90
+        let w = max(size.width, 200), h = max(size.height, 90)
 
         let container = NSView(frame: NSRect(x: viewPt.x, y: viewPt.y - h / 2, width: w, height: h))
         container.wantsLayer = true
@@ -804,26 +810,43 @@ final class AnnotatingPDFView: PDFView {
         container.layer?.shadowRadius  = 6
         container.layer?.shadowOffset  = .zero
 
-        let tv = InlineTextView(frame: container.bounds.insetBy(dx: 4, dy: 4))
-        tv.autoresizingMask = [.width, .height]
+        let scrollView = NSScrollView(frame: container.bounds.insetBy(dx: 4, dy: 4))
+        scrollView.autoresizingMask = [.width, .height]
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+
+        let tv = InlineTextView(frame: scrollView.bounds)
+        tv.minSize = NSSize(width: 0, height: scrollView.bounds.height)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.isEditable = true
         tv.isRichText = false
         tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.autoresizingMask = [.width]
+        tv.textContainer?.widthTracksTextView = true
         tv.font = NSFont.systemFont(ofSize: 16)
         tv.textColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
         tv.backgroundColor = .clear
         tv.drawsBackground = false
         tv.insertionPointColor = NSColor(red: 0.45, green: 0, blue: 0.6, alpha: 1)
         tv.string = initialText
-        container.addSubview(tv)
+
+        scrollView.documentView = tv
+        container.addSubview(scrollView)
 
         inlineEditorContainer = container
         addSubview(container)
+        positionInlineEditor()
         window?.makeFirstResponder(tv)
 
         tv.onEnd = { [weak self, weak container] text, cancelled in
             container?.removeFromSuperview()
-            if let self, self.inlineEditorContainer === container { self.inlineEditorContainer = nil }
+            if let self, self.inlineEditorContainer === container {
+                self.inlineEditorContainer = nil
+                self.inlineEditorPagePoint = nil
+                self.inlineEditorPage = nil
+            }
             self?.window?.makeFirstResponder(self)
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !cancelled && !trimmed.isEmpty {
@@ -834,6 +857,26 @@ final class AnnotatingPDFView: PDFView {
         }
     }
 
+    /// Re-anchors the inline editor to its page location and keeps it fully within the visible
+    /// viewport, so it neither drifts off-page while panning nor gets clipped behind side panes.
+    /// Called on scroll/zoom (see `viewDidMoveToWindow`) and right after the editor is created.
+    private func positionInlineEditor() {
+        guard let container = inlineEditorContainer,
+              let page = inlineEditorPage, let point = inlineEditorPagePoint else { return }
+        let viewPt = convert(point, from: page)
+        var frame = container.frame
+        frame.origin = CGPoint(x: viewPt.x, y: viewPt.y - frame.height / 2)
+
+        let visible = self.visibleRect
+        if frame.width < visible.width {
+            frame.origin.x = min(max(frame.origin.x, visible.minX), visible.maxX - frame.width)
+        }
+        if frame.height < visible.height {
+            frame.origin.y = min(max(frame.origin.y, visible.minY), visible.maxY - frame.height)
+        }
+        container.frame = frame
+    }
+
     private func editTextAnnotation(_ annotation: PDFAnnotation, on page: PDFPage) {
         let originalBounds = annotation.bounds
         let originalColor = annotation.color
@@ -841,7 +884,7 @@ final class AnnotatingPDFView: PDFView {
         annotation.color = .clear
 
         let pagePoint = CGPoint(x: originalBounds.minX, y: originalBounds.midY)
-        showInlineComment(at: pagePoint, on: page, initialText: annotation.contents ?? "",
+        showInlineComment(at: pagePoint, on: page, initialText: annotation.contents ?? "", size: originalBounds.size,
         onCommit: { [weak self] text in
             guard let self else { return }
             let font = NSFont(name: "Helvetica", size: 10) ?? NSFont.systemFont(ofSize: 10)
@@ -1348,12 +1391,18 @@ final class AnnotatingPDFView: PDFView {
             clip.postsBoundsChangedNotifications = true
             clipObserver = NotificationCenter.default.addObserver(
                 forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
-            ) { [weak self] _ in self?.positionCommentHandles() }
+            ) { [weak self] _ in
+                self?.positionCommentHandles()
+                self?.positionInlineEditor()
+            }
         }
         if scaleObserver == nil {
             scaleObserver = NotificationCenter.default.addObserver(
                 forName: Notification.Name.PDFViewScaleChanged, object: self, queue: .main
-            ) { [weak self] _ in self?.positionCommentHandles() }
+            ) { [weak self] _ in
+                self?.positionCommentHandles()
+                self?.positionInlineEditor()
+            }
         }
     }
 
