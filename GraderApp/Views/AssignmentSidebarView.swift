@@ -182,6 +182,8 @@ private struct AssignmentSection: View {
         } label: {
             HStack {
                 Text(assignment.name).font(.headline).foregroundStyle(isDropTargeted ? Color.accentColor : .primary)
+                    .contentShape(Rectangle())
+                    .onTapGesture { isExpanded.toggle() }
                 Spacer()
                 Button {
                     let menu = NSMenu()
