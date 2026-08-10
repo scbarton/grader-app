@@ -29,9 +29,14 @@ struct AssignmentSidebarView: View {
     @State private var rubricAssignment: Assignment?
     @State private var d2lExportAssignment: Assignment?
 
+    // Plain String sort puts "Hw10"/"Hw11" before "Hw2"; natural sort orders them numerically.
+    private var sortedAssignments: [Assignment] {
+        assignments.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     var body: some View {
         List(selection: $selectedStudent) {
-            ForEach(assignments) { assignment in
+            ForEach(sortedAssignments) { assignment in
                 AssignmentSection(
                     assignment: assignment,
                     bundleURL: bundleURL,
