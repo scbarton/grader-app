@@ -7,6 +7,12 @@ extension Notification.Name {
     static let navigateRubricItem = Notification.Name("GraderApp.navigateRubricItem")
 }
 
+extension Notification.Name {
+    static let movePageUp   = Notification.Name("GraderApp.movePageUp")
+    static let movePageDown = Notification.Name("GraderApp.movePageDown")
+    static let rotatePage   = Notification.Name("GraderApp.rotatePage")
+}
+
 // MARK: - Annotation tool model
 
 enum AnnotationTool: Equatable, Hashable {
@@ -19,13 +25,14 @@ enum AnnotationTool: Equatable, Hashable {
     case stamp(StampType)
 
     enum StampType: CaseIterable, Hashable {
-        case correct, incorrect, partial
+        case correct, incorrect, partial, question
 
         var symbol: String {
             switch self {
             case .correct:   "✅"
             case .incorrect: "❌"
             case .partial:   "🆗"
+            case .question:  "❓"
             }
         }
 
@@ -34,6 +41,7 @@ enum AnnotationTool: Equatable, Hashable {
             case .correct:   .systemGreen
             case .incorrect: .systemRed
             case .partial:   .systemBlue
+            case .question:  .systemOrange
             }
         }
 
@@ -42,6 +50,7 @@ enum AnnotationTool: Equatable, Hashable {
             case .correct:   "Correct (V)"
             case .incorrect: "Incorrect (X)"
             case .partial:   "OK / Partial (K)"
+            case .question:  "Question (Q)"
             }
         }
     }
@@ -73,6 +82,12 @@ struct PDFViewerView: NSViewRepresentable {
             name: AnnotationToolbar.highlightNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            context.coordinator, selector: #selector(Coordinator.movePageUp), name: .movePageUp, object: nil)
+        NotificationCenter.default.addObserver(
+            context.coordinator, selector: #selector(Coordinator.movePageDown), name: .movePageDown, object: nil)
+        NotificationCenter.default.addObserver(
+            context.coordinator, selector: #selector(Coordinator.rotatePage), name: .rotatePage, object: nil)
 
         // Cmd+Space focuses the PDF view from anywhere (score panel, sidebar, etc.)
         context.coordinator.focusMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak view] event in
@@ -119,6 +134,7 @@ struct PDFViewerView: NSViewRepresentable {
         let newSnapshot = Dictionary(uniqueKeysWithValues: student.scores.map { ($0.rubricItemID, $0.points) })
 
         if url != context.coordinator.loadedURL {
+            NSLog("[LockupDebug] document swap: editor=\(pdfView.debugHasInlineEditor) highlightDrag=\(pdfView.debugHasHighlightDrag) inkDrag=\(pdfView.debugHasInkDrag) dragging=\(pdfView.debugHasDraggingAnnotation) resizing=\(pdfView.debugHasResizingAnnotation)")
             // Student changed: clear selection (avoids touching a stale annotation's color
             // in savePDF), save the current PDF, then load the new one.
             pdfView.selectAnnotation(nil)
@@ -200,6 +216,11 @@ struct PDFViewerView: NSViewRepresentable {
             }
             pdfView.clearSelection()
         }
+
+        // Called by toolbar buttons (page-management bank)
+        @objc func movePageUp()   { pdfView?.moveCurrentPage(by: -1) }
+        @objc func movePageDown() { pdfView?.moveCurrentPage(by: 1) }
+        @objc func rotatePage()   { pdfView?.rotateCurrentPage() }
 
         func pdfViewDidDrawHighlight(bounds: CGRect, on page: PDFPage) {
             let ann = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
@@ -735,12 +756,16 @@ private final class InlineTextView: NSTextView {
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
+        NSLog("[LockupDebug] InlineTextView.resignFirstResponder -> \(ok)")
         if ok { end(cancelled: false) }
         return ok
     }
 
     private func end(cancelled: Bool) {
-        guard !ended else { return }
+        guard !ended else {
+            NSLog("[LockupDebug] InlineTextView.end called again after already ended (cancelled=\(cancelled)) — ignored")
+            return
+        }
         ended = true
         onEnd?(string, cancelled)
     }
@@ -774,6 +799,13 @@ final class AnnotatingPDFView: PDFView {
     // Inline comment editor overlay
     private var inlineEditorContainer: NSView?
 
+    // Debug-only visibility into gating state, for tracing the "app locks up" report.
+    var debugHasInlineEditor: Bool { inlineEditorContainer != nil }
+    var debugHasHighlightDrag: Bool { highlightDragPage != nil || highlightRubberBand != nil }
+    var debugHasInkDrag: Bool { inkDragPage != nil }
+    var debugHasDraggingAnnotation: Bool { draggingAnnotation != nil }
+    var debugHasResizingAnnotation: Bool { resizingAnnotation != nil }
+
     // Comment selection (Comment tool): a selected comment shows corner handles and can be
     // moved/resized. `selectionTinted` distinguishes the blue pointer-selection (which savePDF
     // must un-tint before serializing) from the handle-selection (real color, never tinted).
@@ -790,6 +822,26 @@ final class AnnotatingPDFView: PDFView {
     // Anchor for the inline editor overlay, so it can be re-positioned as the page scrolls or zooms.
     private var inlineEditorPagePoint: CGPoint?
     private weak var inlineEditorPage: PDFPage?
+
+    // MARK: - Page management (rotate / reorder)
+
+    func rotateCurrentPage() {
+        guard let page = currentPage else { return }
+        page.rotation = (page.rotation + 90) % 360
+        annotationDelegate?.pdfViewDidModify(self)
+    }
+
+    /// Swaps the current page with its neighbor `direction` places away (-1 = up/earlier,
+    /// +1 = down/later) and keeps the same page displayed after the reorder.
+    func moveCurrentPage(by direction: Int) {
+        guard let document, let page = currentPage else { return }
+        let index = document.index(for: page)
+        let newIndex = index + direction
+        guard newIndex >= 0, newIndex < document.pageCount else { return }
+        document.exchangePage(at: index, withPageAt: newIndex)
+        go(to: page)
+        annotationDelegate?.pdfViewDidModify(self)
+    }
 
     func showInlineComment(at pagePoint: CGPoint, on page: PDFPage, initialText: String = "", size: CGSize = CGSize(width: 200, height: 90), onCommit: @escaping (String) -> Void, onCancel: (() -> Void)? = nil) {
         inlineEditorContainer?.removeFromSuperview()
@@ -838,14 +890,20 @@ final class AnnotatingPDFView: PDFView {
         inlineEditorContainer = container
         addSubview(container)
         positionInlineEditor()
-        window?.makeFirstResponder(tv)
+        NSLog("[LockupDebug] inlineEditorContainer SET")
+        let becameFirstResponder = window?.makeFirstResponder(tv) ?? false
+        NSLog("[LockupDebug] makeFirstResponder(tv) -> \(becameFirstResponder)")
 
         tv.onEnd = { [weak self, weak container] text, cancelled in
+            NSLog("[LockupDebug] inlineEditorContainer onEnd cancelled=\(cancelled)")
             container?.removeFromSuperview()
             if let self, self.inlineEditorContainer === container {
                 self.inlineEditorContainer = nil
                 self.inlineEditorPagePoint = nil
                 self.inlineEditorPage = nil
+                NSLog("[LockupDebug] inlineEditorContainer CLEARED")
+            } else {
+                NSLog("[LockupDebug] inlineEditorContainer onEnd fired but container was already stale/mismatched")
             }
             self?.window?.makeFirstResponder(self)
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -907,6 +965,7 @@ final class AnnotatingPDFView: PDFView {
 
     override func mouseDown(with event: NSEvent) {
         let hadEditor = inlineEditorContainer != nil
+        NSLog("[LockupDebug] mouseDown tool=\(currentTool) delegate=\(annotationDelegate == nil ? "nil" : "set") hadEditor=\(hadEditor) rubberBand=\(highlightRubberBand != nil) highlightDrag=\(highlightDragPage != nil) inkDrag=\(inkDragPage != nil) dragging=\(draggingAnnotation != nil) resizing=\(resizingAnnotation != nil)")
         // Always claim focus — if an inline editor is open this causes it to resign and commit
         window?.makeFirstResponder(self)
         let loc = pageLocation(for: event)
@@ -1210,6 +1269,7 @@ final class AnnotatingPDFView: PDFView {
                 rb.layer?.borderColor = NSColor(calibratedRed: 1, green: 0.75, blue: 0, alpha: 0.8).cgColor
                 addSubview(rb)
                 highlightRubberBand = rb
+                NSLog("[LockupDebug] highlightRubberBand created rect=\(rect)")
             }
             return
         }
@@ -1247,6 +1307,7 @@ final class AnnotatingPDFView: PDFView {
 
         // Commit highlight rectangle
         if let startPage = highlightDragPage, let startPt = highlightDragStartPagePoint {
+            NSLog("[LockupDebug] highlightRubberBand cleared in mouseUp")
             highlightRubberBand?.removeFromSuperview()
             highlightRubberBand = nil
             highlightDragPage = nil
@@ -1351,14 +1412,11 @@ final class AnnotatingPDFView: PDFView {
             case .handwriting: annotationDelegate?.pdfViewDidRequestTool(.ink)
             case .delete:    annotationDelegate?.pdfViewDidRequestTool(.delete)
             case .grade:     annotationDelegate?.pdfViewDidRequestTool(.grade)
-            case .rotate:
-                if let page = currentPage {
-                    page.rotation = (page.rotation + 90) % 360
-                    annotationDelegate?.pdfViewDidModify(self)
-                }
+            case .rotate:    rotateCurrentPage()
             case .correct:   annotationDelegate?.pdfViewDidRequestTool(.stamp(.correct))
             case .incorrect: annotationDelegate?.pdfViewDidRequestTool(.stamp(.incorrect))
             case .partial:   annotationDelegate?.pdfViewDidRequestTool(.stamp(.partial))
+            case .question:  annotationDelegate?.pdfViewDidRequestTool(.stamp(.question))
             }
             return
         }

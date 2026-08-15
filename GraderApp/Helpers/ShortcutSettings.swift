@@ -5,7 +5,7 @@ import Observation
 /// pressed while the PDF view has focus. Grade-entry digits and Cmd+arrow navigation
 /// are intentionally not part of this set (they stay fixed).
 enum ShortcutAction: String, CaseIterable, Identifiable {
-    case pointer, comment, highlight, handwriting, delete, grade, rotate, correct, incorrect, partial
+    case pointer, comment, highlight, handwriting, delete, grade, rotate, correct, incorrect, partial, question
 
     var id: String { rawValue }
 
@@ -21,6 +21,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .correct:   "Correct"
         case .incorrect: "Incorrect"
         case .partial:   "Partial / OK"
+        case .question:  "Question"
         }
     }
 
@@ -30,6 +31,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .correct:   "✅"
         case .incorrect: "❌"
         case .partial:   "🆗"
+        case .question:  "❓"
         default:         nil
         }
     }
@@ -46,6 +48,7 @@ enum ShortcutAction: String, CaseIterable, Identifiable {
         case .correct:     "v"
         case .incorrect:   "x"
         case .partial:     "k"
+        case .question:    "q"
         }
     }
 }

@@ -54,6 +54,37 @@ struct AnnotationToolbar: ToolbarContent {
                 .help(stampType.label + " · select tool, then click on PDF")
             }
         }
+
+        ToolbarItemGroup(placement: .principal) {
+            Divider()
+
+            Button {
+                NotificationCenter.default.post(name: .movePageUp, object: nil)
+            } label: {
+                Label("Move Page Up", systemImage: "arrow.up")
+                    .labelStyle(.iconOnly)
+                    .frame(width: 28, height: 22)
+            }
+            .help("Move this page earlier in the document")
+
+            Button {
+                NotificationCenter.default.post(name: .movePageDown, object: nil)
+            } label: {
+                Label("Move Page Down", systemImage: "arrow.down")
+                    .labelStyle(.iconOnly)
+                    .frame(width: 28, height: 22)
+            }
+            .help("Move this page later in the document")
+
+            Button {
+                NotificationCenter.default.post(name: .rotatePage, object: nil)
+            } label: {
+                Label("Rotate Page", systemImage: "rotate.right")
+                    .labelStyle(.iconOnly)
+                    .frame(width: 28, height: 22)
+            }
+            .help("Rotate this page 90° · shortcut: R")
+        }
     }
 }
 
