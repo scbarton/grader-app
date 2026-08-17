@@ -1,6 +1,7 @@
 import SwiftUI
 import PDFKit
 import AppKit
+import os
 
 extension Notification.Name {
     static let navigateStudent    = Notification.Name("GraderApp.navigateStudent")
@@ -775,6 +776,10 @@ private final class InlineTextView: NSTextView {
 // MARK: - Custom PDFView
 
 final class AnnotatingPDFView: PDFView {
+    // os.Logger rather than NSLog so this stays readable in Release builds: NSLog only
+    // reaches stderr, which is /dev/null for a normally launched app.
+    private static let log = Logger(subsystem: "org.powrbox.grader", category: "pdfview")
+
     var currentTool: AnnotationTool = .pointer
     weak var annotationDelegate: AnnotationDelegate?
 
@@ -1461,7 +1466,7 @@ final class AnnotatingPDFView: PDFView {
             // Safety net: a stale document-view layout makes every annotation click miss
             // silently (see the swap path in updateNSView). Relayout and retry rather than
             // dropping the click on the floor.
-            NSLog("[Grader] pageLocation found no page with \(document?.pageCount ?? -1) pages loaded — relaying out and retrying")
+            Self.log.warning("pageLocation found no page with \(self.document?.pageCount ?? -1, privacy: .public) pages loaded — relaying out and retrying")
             layoutDocumentView()
             hit = page(for: viewPoint, nearest: true)
         }
