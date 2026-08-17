@@ -134,7 +134,6 @@ struct PDFViewerView: NSViewRepresentable {
         let newSnapshot = Dictionary(uniqueKeysWithValues: student.scores.map { ($0.rubricItemID, $0.points) })
 
         if url != context.coordinator.loadedURL {
-            NSLog("[LockupDebug] document swap: editor=\(pdfView.debugHasInlineEditor) highlightDrag=\(pdfView.debugHasHighlightDrag) inkDrag=\(pdfView.debugHasInkDrag) dragging=\(pdfView.debugHasDraggingAnnotation) resizing=\(pdfView.debugHasResizingAnnotation)")
             // Student changed: clear selection (avoids touching a stale annotation's color
             // in savePDF), save the current PDF, then load the new one.
             pdfView.selectAnnotation(nil)
@@ -147,6 +146,12 @@ struct PDFViewerView: NSViewRepresentable {
                 pdfView.autoScales = true
                 DispatchQueue.main.async {
                     pdfView.autoScales = false
+                    // Turning autoScales back off applies the fitted scale but does NOT relay out
+                    // the document view. Without this the page frames stay stale and
+                    // page(for:nearest:) returns nil for every click — annotation tools go dead
+                    // until the next swap happens to relayout. Rapid successive swaps make it
+                    // likely, since these async blocks can run after a newer document is installed.
+                    pdfView.layoutDocumentView()
                     DispatchQueue.main.async {
                         context.coordinator.ensureQuizStamps()
                         context.coordinator.refreshAnnotationColors()
@@ -756,16 +761,12 @@ private final class InlineTextView: NSTextView {
 
     override func resignFirstResponder() -> Bool {
         let ok = super.resignFirstResponder()
-        NSLog("[LockupDebug] InlineTextView.resignFirstResponder -> \(ok)")
         if ok { end(cancelled: false) }
         return ok
     }
 
     private func end(cancelled: Bool) {
-        guard !ended else {
-            NSLog("[LockupDebug] InlineTextView.end called again after already ended (cancelled=\(cancelled)) — ignored")
-            return
-        }
+        guard !ended else { return }
         ended = true
         onEnd?(string, cancelled)
     }
@@ -798,13 +799,6 @@ final class AnnotatingPDFView: PDFView {
 
     // Inline comment editor overlay
     private var inlineEditorContainer: NSView?
-
-    // Debug-only visibility into gating state, for tracing the "app locks up" report.
-    var debugHasInlineEditor: Bool { inlineEditorContainer != nil }
-    var debugHasHighlightDrag: Bool { highlightDragPage != nil || highlightRubberBand != nil }
-    var debugHasInkDrag: Bool { inkDragPage != nil }
-    var debugHasDraggingAnnotation: Bool { draggingAnnotation != nil }
-    var debugHasResizingAnnotation: Bool { resizingAnnotation != nil }
 
     // Comment selection (Comment tool): a selected comment shows corner handles and can be
     // moved/resized. `selectionTinted` distinguishes the blue pointer-selection (which savePDF
@@ -890,20 +884,14 @@ final class AnnotatingPDFView: PDFView {
         inlineEditorContainer = container
         addSubview(container)
         positionInlineEditor()
-        NSLog("[LockupDebug] inlineEditorContainer SET")
-        let becameFirstResponder = window?.makeFirstResponder(tv) ?? false
-        NSLog("[LockupDebug] makeFirstResponder(tv) -> \(becameFirstResponder)")
+        window?.makeFirstResponder(tv)
 
         tv.onEnd = { [weak self, weak container] text, cancelled in
-            NSLog("[LockupDebug] inlineEditorContainer onEnd cancelled=\(cancelled)")
             container?.removeFromSuperview()
             if let self, self.inlineEditorContainer === container {
                 self.inlineEditorContainer = nil
                 self.inlineEditorPagePoint = nil
                 self.inlineEditorPage = nil
-                NSLog("[LockupDebug] inlineEditorContainer CLEARED")
-            } else {
-                NSLog("[LockupDebug] inlineEditorContainer onEnd fired but container was already stale/mismatched")
             }
             self?.window?.makeFirstResponder(self)
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -965,7 +953,6 @@ final class AnnotatingPDFView: PDFView {
 
     override func mouseDown(with event: NSEvent) {
         let hadEditor = inlineEditorContainer != nil
-        NSLog("[LockupDebug] mouseDown tool=\(currentTool) delegate=\(annotationDelegate == nil ? "nil" : "set") hadEditor=\(hadEditor) rubberBand=\(highlightRubberBand != nil) highlightDrag=\(highlightDragPage != nil) inkDrag=\(inkDragPage != nil) dragging=\(draggingAnnotation != nil) resizing=\(resizingAnnotation != nil)")
         // Always claim focus — if an inline editor is open this causes it to resign and commit
         window?.makeFirstResponder(self)
         let loc = pageLocation(for: event)
@@ -1269,7 +1256,6 @@ final class AnnotatingPDFView: PDFView {
                 rb.layer?.borderColor = NSColor(calibratedRed: 1, green: 0.75, blue: 0, alpha: 0.8).cgColor
                 addSubview(rb)
                 highlightRubberBand = rb
-                NSLog("[LockupDebug] highlightRubberBand created rect=\(rect)")
             }
             return
         }
@@ -1307,7 +1293,6 @@ final class AnnotatingPDFView: PDFView {
 
         // Commit highlight rectangle
         if let startPage = highlightDragPage, let startPt = highlightDragStartPagePoint {
-            NSLog("[LockupDebug] highlightRubberBand cleared in mouseUp")
             highlightRubberBand?.removeFromSuperview()
             highlightRubberBand = nil
             highlightDragPage = nil
@@ -1471,7 +1456,16 @@ final class AnnotatingPDFView: PDFView {
 
     private func pageLocation(for event: NSEvent) -> (page: PDFPage, point: CGPoint)? {
         let viewPoint = convert(event.locationInWindow, from: nil)
-        guard let page = page(for: viewPoint, nearest: true) else { return nil }
+        var hit = page(for: viewPoint, nearest: true)
+        if hit == nil, document != nil {
+            // Safety net: a stale document-view layout makes every annotation click miss
+            // silently (see the swap path in updateNSView). Relayout and retry rather than
+            // dropping the click on the floor.
+            NSLog("[Grader] pageLocation found no page with \(document?.pageCount ?? -1) pages loaded — relaying out and retrying")
+            layoutDocumentView()
+            hit = page(for: viewPoint, nearest: true)
+        }
+        guard let page = hit else { return nil }
         return (page, convert(viewPoint, to: page))
     }
 }
