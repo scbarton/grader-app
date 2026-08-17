@@ -7,7 +7,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>Grader</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.powrbox.grader</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleVersion</key>
 	<string>3</string>
 	<key>CFBundleShortVersionString</key>

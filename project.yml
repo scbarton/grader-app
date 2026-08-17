@@ -20,7 +20,10 @@ targets:
       - GraderApp/Resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: org.powrbox.GraderApp
+        # Must match CFBundleIdentifier in Resources/Info.plist, which derives from this
+        # setting. Changing it changes the app's identity: code signature, notarization,
+        # LaunchServices registration and existing user defaults all key off it.
+        PRODUCT_BUNDLE_IDENTIFIER: org.powrbox.grader
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         INFOPLIST_FILE: GraderApp/Resources/Info.plist
