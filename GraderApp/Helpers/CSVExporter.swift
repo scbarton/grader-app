@@ -2,51 +2,41 @@ import AppKit
 import Foundation
 
 enum CSVExporter {
-    static func export(assignment: Assignment) {
-        let rubric = assignment.rubricItems.sorted(by: { $0.order < $1.order })
-        let students = assignment.students.sorted(by: { $0.name < $1.name })
+    /// Full grade breakdown: identity columns, one column per rubric item, then the totals.
+    /// Not a D2L import file — D2L only accepts columns matching existing grade items.
+    static func exportGrades(assignment: Assignment, roster: [RosterEntry]) {
+        let rubric = assignment.rubricItems.sorted { $0.order < $1.order }
+        let students = assignment.students.sorted { $0.name < $1.name }
+        let maxPoints = assignment.maxPoints
 
         var rows: [[String]] = []
 
-        // Header
-        var header = ["Student"]
-        header += rubric.map { "\($0.name) (/\(formatPts($0.maxPoints)))" }
+        var header = ["OrgDefinedId", "Username", "Last Name", "First Name", "Email"]
+        header += rubric.map(\.name)
         header += ["Total", "Max", "Pct"]
         rows.append(header)
 
-        // Data rows
         for student in students {
-            var row = [student.name]
+            let entry = roster.first { $0.email.lowercased() == student.email.lowercased() }
+            let orgId = entry?.orgDefinedId ?? student.orgDefinedId
+            let uname = entry?.username     ?? student.username
+            let (last, first) = splitName(student.name)
+            var row = [orgId, uname, last, first, student.email]
+
             var total = 0.0
             for item in rubric {
-                if let score = student.scores.first(where: { $0.rubricItemID == item.id }) {
-                    row.append(score.points.map { formatPts($0) } ?? "")
-                    total += score.points ?? 0
-                } else {
-                    row.append("")
-                }
+                // Ungraded stays blank rather than 0, so it reads differently from a real zero.
+                let pts = student.scores.first { $0.rubricItemID == item.id }?.points
+                row.append(pts.map { formatPts($0) } ?? "")
+                total += pts ?? 0
             }
-            let max = assignment.maxPoints
-            let pct = max > 0 ? String(format: "%.1f%%", total / max * 100) : ""
-            row += [formatPts(total), formatPts(max), pct]
+
+            let pct = maxPoints > 0 ? String(format: "%.1f%%", total / maxPoints * 100) : ""
+            row += [formatPts(total), formatPts(maxPoints), pct]
             rows.append(row)
         }
 
-        let csv = rows.map { row in
-            row.map { cell in
-                cell.contains(",") || cell.contains("\"") || cell.contains("\n")
-                    ? "\"\(cell.replacingOccurrences(of: "\"", with: "\"\""))\""
-                    : cell
-            }.joined(separator: ",")
-        }.joined(separator: "\n")
-
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.commaSeparatedText]
-        panel.nameFieldStringValue = "\(assignment.name) Scores.csv"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            try? csv.write(to: url, atomically: true, encoding: .utf8)
-        }
+        save(rows: rows, suggestedName: "\(assignment.name) Grades.csv")
     }
 
     // MARK: - D2L ID import
@@ -89,6 +79,8 @@ enum CSVExporter {
 
     // MARK: - D2L grade export
 
+    /// Total score only. D2L rejects the file when unrecognized per-problem columns are
+    /// present, so problem breakdowns live in `exportGrades` instead.
     static func exportD2L(assignment: Assignment, roster: [RosterEntry], columnHeader: String) {
         let students = assignment.students.sorted { $0.name < $1.name }
 
@@ -106,6 +98,12 @@ enum CSVExporter {
             rows.append([idStr, userStr, last, first, student.email, formatPts(student.totalScore), "#"])
         }
 
+        save(rows: rows, suggestedName: "\(assignment.name) D2L Grades.csv")
+    }
+
+    // MARK: - Helpers
+
+    private static func save(rows: [[String]], suggestedName: String) {
         let csv = rows.map { row in
             row.map { cell in
                 cell.contains(",") || cell.contains("\"") || cell.contains("\n")
@@ -116,13 +114,11 @@ enum CSVExporter {
 
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.nameFieldStringValue = "\(assignment.name) D2L Grades.csv"
+        panel.nameFieldStringValue = suggestedName
         if panel.runModal() == .OK, let url = panel.url {
             try? csv.write(to: url, atomically: true, encoding: .utf8)
         }
     }
-
-    // MARK: - Helpers
 
     private static func splitName(_ name: String) -> (last: String, first: String) {
         let parts = name.trimmingCharacters(in: .whitespaces)

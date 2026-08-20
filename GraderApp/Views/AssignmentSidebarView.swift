@@ -49,6 +49,7 @@ struct AssignmentSidebarView: View {
                     onImport:       { importRequest = ImportRequest(assignment: assignment, urls: []) },
                     onDropFiles:    { urls in importRequest = ImportRequest(assignment: assignment, urls: urls) },
                     onExport:       { PDFExporter.showExportPanel(for: assignment, bundleURL: bundleURL) },
+                    onExportGrades: { CSVExporter.exportGrades(assignment: assignment, roster: roster) },
                     onExportD2L:    {
                         if assignment.d2lColumnHeader.isEmpty {
                             d2lExportAssignment = assignment
@@ -148,6 +149,7 @@ private struct AssignmentSection: View {
     let onImport: () -> Void
     let onDropFiles: ([URL]) -> Void
     let onExport: () -> Void
+    let onExportGrades: () -> Void
     let onExportD2L: () -> Void
     let onDelete: () -> Void
 
@@ -190,6 +192,7 @@ private struct AssignmentSection: View {
                     menu.addItem(withTitle: "Edit Rubric…",          action: onEditRubric)
                     menu.addItem(withTitle: "Import PDFs…",          action: onImport)
                     menu.addItem(withTitle: "Export Graded PDFs…",   action: onExport)
+                    menu.addItem(withTitle: "Export Grades…",        action: onExportGrades)
                     menu.addItem(withTitle: "Export Grades for D2L…",action: onExportD2L)
                     menu.addItem(.separator())
                     menu.addItem(withTitle: "Delete Assignment", action: onDelete, destructive: true)
