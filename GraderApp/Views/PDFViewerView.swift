@@ -280,7 +280,6 @@ struct PDFViewerView: NSViewRepresentable {
             }
             pdfView?.undoManager?.setActionName("Add Annotation")
             savePDF()
-            pdfView?.scheduleSharpen()
         }
 
         private func showTextAnnotation(page: PDFPage, at point: CGPoint) {
@@ -658,6 +657,7 @@ struct PDFViewerView: NSViewRepresentable {
             editing?.shouldDisplay = false
             if tinted, let sel { sel.color = NSColor.systemBlue.withAlphaComponent(0.25) }
             if let data { try? data.write(to: url, options: .atomic) }
+            pdfView?.scheduleSharpen()
         }
     }
 }
@@ -980,7 +980,6 @@ final class AnnotatingPDFView: PDFView {
             annotation.shouldDisplay = true
             self.editingAnnotation = nil
             self.annotationDelegate?.pdfViewDidModify(self)
-            self.scheduleSharpen()
         },
         onCancel: { [weak self] in
             annotation.shouldDisplay = true
@@ -1147,6 +1146,7 @@ final class AnnotatingPDFView: PDFView {
     /// tinted blue. With `handles: true` (Comment tool) the real color is kept and four corner
     /// resize handles are shown instead. Passing nil clears any selection and the handles.
     func selectAnnotation(_ annotation: PDFAnnotation?, handles: Bool = false) {
+        defer { scheduleSharpen() }
         // Restore previous selection's original color
         if let prev = selectedAnnotation, let orig = selectedOriginalColor {
             prev.color = orig
@@ -1252,6 +1252,7 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        defer { scheduleSharpen() }
         // Comment resize drag — span a rect between the fixed anchor corner and the cursor
         if let ann = resizingAnnotation, let page = commentSelectionPage {
             let viewPoint = convert(event.locationInWindow, from: nil)
@@ -1317,6 +1318,7 @@ final class AnnotatingPDFView: PDFView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        defer { scheduleSharpen() }
         // Commit freehand ink stroke
         if let page = inkDragPage {
             let viewPt = convert(event.locationInWindow, from: nil)
@@ -1499,10 +1501,18 @@ final class AnnotatingPDFView: PDFView {
         scheduleSharpen()
     }
 
-    // PDFKit creates annotation layers lazily on a later display pass, so retry shortly after.
+    // Any annotation mutation (color tint, bounds, remove/re-add) makes PDFKit rebuild its layer
+    // at scale 1, sometimes on a later display pass, so sharpen now and again shortly after.
+    private var sharpenRetryPending = false
     func scheduleSharpen() {
+        sharpenAnnotationLayers()
         DispatchQueue.main.async { [weak self] in self?.sharpenAnnotationLayers() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.sharpenAnnotationLayers() }
+        guard !sharpenRetryPending else { return }
+        sharpenRetryPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.sharpenRetryPending = false
+            self?.sharpenAnnotationLayers()
+        }
     }
 
     // macOS 27 PDFView rasterizes each annotation into a private PDFPageLayerAnnotationEffect
