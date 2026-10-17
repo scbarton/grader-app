@@ -13,6 +13,7 @@ struct RosterView: View {
     @State private var editingEntry: RosterEntry?
     @State private var showingCSVImport = false
     @State private var csvError: String?
+    @State private var selection = Set<RosterEntry.ID>()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,11 +35,11 @@ struct RosterView: View {
                 ContentUnavailableView(
                     "No Students",
                     systemImage: "person.3",
-                    description: Text("Add students manually or import a CSV with columns: First Name, Last Name, Email")
+                    description: Text("Add students manually, or import a D2L Classlist Export, D2L grade export, or a simple First Name, Last Name, Email CSV")
                 )
                 .frame(height: 160)
             } else {
-                Table(roster) {
+                Table(roster, selection: $selection) {
                     TableColumn("Last Name", value: \.lastName)
                     TableColumn("First Name", value: \.firstName)
                     TableColumn("Email", value: \.email)
@@ -48,10 +49,25 @@ struct RosterView: View {
                 .frame(minHeight: 180)
                 .contextMenu(forSelectionType: RosterEntry.ID.self) { ids in
                     Button("Delete", role: .destructive) {
-                        for entry in roster.filter({ ids.contains($0.id) }) {
-                            context.delete(entry)
-                        }
+                        deleteEntries(withIDs: ids)
                     }
+                }
+
+                if !selection.isEmpty {
+                    HStack {
+                        Text("\(selection.count) selected")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                        Spacer()
+                        Button(role: .destructive) {
+                            deleteEntries(withIDs: selection)
+                        } label: {
+                            Label("Delete Selected", systemImage: "trash")
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 6)
                 }
             }
 
@@ -115,6 +131,14 @@ struct RosterView: View {
         firstName = ""; lastName = ""; email = ""; editingEntry = nil
     }
 
+    private func deleteEntries(withIDs ids: Set<RosterEntry.ID>) {
+        for entry in roster.filter({ ids.contains($0.id) }) {
+            if entry.id == editingEntry?.id { clearForm() }
+            context.delete(entry)
+        }
+        selection.subtract(ids)
+    }
+
     private func importD2LIds() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.commaSeparatedText, .plainText]
@@ -131,7 +155,7 @@ struct RosterView: View {
     private func importCSV() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.commaSeparatedText, .plainText]
-        panel.message = "Select a CSV file — either a D2L grade export or a simple First Name, Last Name, Email CSV"
+        panel.message = "Select a D2L Classlist Export, D2L grade export, or a simple First Name, Last Name, Email CSV"
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         do {
@@ -140,7 +164,8 @@ struct RosterView: View {
             guard !lines.isEmpty else { csvError = "File is empty."; return }
 
             let header = parseCSVLine(lines[0]).map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            let isD2L  = header.contains("orgdefinedid")
+            let isD2L       = header.contains("orgdefinedid")
+            let isClasslist = !isD2L && header.contains("name") && header.contains("username") && header.contains("email") && !header.contains("first name")
 
             if isD2L {
                 guard let idIdx    = header.firstIndex(of: "orgdefinedid"),
@@ -179,6 +204,51 @@ struct RosterView: View {
                 let alert = NSAlert()
                 alert.messageText = "Roster Import Complete"
                 alert.informativeText = "\(added) student\(added == 1 ? "" : "s") added, \(updated) updated with D2L IDs."
+                alert.alertStyle = .informational
+                alert.runModal()
+            } else if isClasslist {
+                guard let nameIdx  = header.firstIndex(of: "name"),
+                      let userIdx  = header.firstIndex(of: "username"),
+                      let emailIdx = header.firstIndex(of: "email") else {
+                    csvError = "Classlist export missing expected columns."; return
+                }
+                let roleIdx = header.firstIndex(of: "role")
+                var added = 0, updated = 0, skipped = 0
+                for line in lines.dropFirst() {
+                    let cols = parseCSVLine(line)
+                    let maxIdx = max(nameIdx, userIdx, emailIdx)
+                    guard cols.count > maxIdx else { continue }
+                    if let roleIdx, cols.count > roleIdx,
+                       !cols[roleIdx].trimmingCharacters(in: .whitespaces).lowercased().isEmpty,
+                       cols[roleIdx].trimmingCharacters(in: .whitespaces).lowercased() != "student" {
+                        skipped += 1; continue
+                    }
+                    let rawName = cols[nameIdx].trimmingCharacters(in: .whitespaces)
+                    let uname   = cols[userIdx].trimmingCharacters(in: .whitespaces)
+                    let email   = cols[emailIdx].trimmingCharacters(in: .whitespaces)
+                    let parts   = rawName.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+                    guard parts.count == 2 else { continue }
+                    let last = parts[0], first = parts[1]
+                    guard !first.isEmpty, !last.isEmpty else { continue }
+                    if let existing = roster.first(where: { $0.email.lowercased() == email.lowercased() || (!uname.isEmpty && $0.username == uname) }) {
+                        existing.firstName = first
+                        existing.lastName  = last
+                        existing.email     = email
+                        existing.username  = uname
+                        updated += 1
+                    } else {
+                        let entry = RosterEntry(firstName: first, lastName: last, email: email)
+                        entry.username = uname
+                        context.insert(entry)
+                        added += 1
+                    }
+                }
+                csvError = (added + updated) > 0 ? nil : "No valid rows found."
+                let alert = NSAlert()
+                alert.messageText = "Roster Import Complete"
+                var info = "\(added) student\(added == 1 ? "" : "s") added, \(updated) updated"
+                if skipped > 0 { info += ", \(skipped) non-student row\(skipped == 1 ? "" : "s") skipped" }
+                alert.informativeText = info + "."
                 alert.alertStyle = .informational
                 alert.runModal()
             } else {
